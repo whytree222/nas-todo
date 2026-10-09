@@ -32,8 +32,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       await DesktopWindow.setCompact(value);
       if (mounted) setState(() => _desktop = value);
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('桌面小窗切换失败，请重试')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('桌面小窗切换失败，请重试')));
+      }
     }
   }
 

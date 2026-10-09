@@ -78,7 +78,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         TextButton(onPressed: () => _select(DateTime.now()), child: const Text('今天')),
       ]),
       const SizedBox(height: 10),
-      const Row(children: [
+      Row(children: [
         for (final label in ['一', '二', '三', '四', '五', '六', '日'])
           Expanded(child: Center(child: Text(label))),
       ]),
