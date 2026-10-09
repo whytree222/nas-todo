@@ -1,29 +1,33 @@
 # 验证记录
 
-本工程目前是源码交付。不能把“有构建脚本 / CI 配置”理解为“已经构建成功”。
+2026-10-09，GitHub Actions 运行 [37900998859](https://github.com/whytree222/nas-todo/actions/runs/37900998859) 的三个任务全部成功。构建对应代码提交 `bc35fc387f926ffb9370369974961cb257a0ceb2`，使用 Flutter stable 3.47.6 / Dart 3.13.5 / Python 3.12；Windows 使用 windows-2022。
 
-| 项目 | 本次状态 |
+| 项目 | 结果 |
 | --- | --- |
-| 客户端 Flutter 静态分析 | 尚未完成；本地 Flutter/Dart 工具环境受限 |
-| 客户端 Flutter 测试 | 尚未完成；本地 Flutter/Dart 工具环境受限 |
-| Dart 语法解析 | Tree-sitter 对 10 个 Dart 文件解析通过；不等于类型检查或 Flutter 编译 |
-| 原生平台静态资源 | 7 个 XML 文件与 Windows 应用清单解析通过；Gradle wrapper JAR 完整，Windows ICO 头有效；未编译 |
-| Android APK 构建 | 未执行，没有可交付 APK |
-| Windows 原生构建 | 未执行，没有可交付 Windows 二进制 |
-| 服务端 Python HTTP / SQLite 测试 | Python 3.12.14 下 18 项全部通过 |
-| PowerShell 构建脚本 | 语法解析通过；用模拟 Flutter 验证检查顺序和错误时停止，未执行真实构建 |
-| GitHub Actions 配置 | YAML 解析与任务关系检查通过，已上传使用者的私有仓库；实际运行结果待确认 |
-| Docker 镜像构建 / DX4600 部署 | 未在真实 NAS 上验证 |
-| 安卓与 Windows 实机同步 | 未验证 |
-| NAS ZeroTier 待办端口 | 已检查 `10.59.218.68:8787`，连接被拒绝（WinError 10061），尚未获得 `/health` 响应 |
-| 手机外网 ZeroTier 同步 | 未验证；三台设备已加入同一网络，待启动待办服务后验证 |
+| 服务端 HTTP / SQLite 测试 | GitHub Ubuntu 中 18 项通过；此前本地 Python 3.12.14 中亦通过 |
+| 客户端静态分析 | 安卓与 Windows 两个任务均 No issues found |
+| 客户端测试 | 安卓与 Windows 两个任务各 23 项全部通过 |
+| Android APK | flutter build apk --debug 成功，已上传测试 APK 产物 |
+| Windows x64 | flutter build windows --release 成功，已上传完整程序目录产物 |
+| NAS 初始化 | 用户日志确认 todo-init 完成 data 目录初始化 |
+| NAS 程序挂载权限 | v3 配置移除 app.py 文件挂载，用户反馈部署已好；独立健康检查仍待设备确认 |
+| 实机安全存储、双端和外网同步 | 尚未验证，需要按安装说明验收 |
 
-已写出 19 个客户端集成测试和 4 个界面测试。集成测试会启动隔离的真实 Python 后端，覆盖离线保存、双端同步、冲突、响应丢失后重试及继续编辑、备份恢复、完成状态竞态与实例身份校验。测试代码存在并不表示本次已通过这些客户端测试。
+客户端测试包含 19 项使用隔离真实 Python 后端的集成测试，以及 4 项界面测试，覆盖离线持久化、双端同步、冲突、响应丢失后重试、后续离线编辑、备份恢复、实例身份校验、完成状态竞态、窄屏/桌面布局及编辑期间收到更新后的覆盖确认。云端测试不访问真实 NAS，也不使用其密钥。
 
-本地尝试运行 Flutter/Dart 工具时，观察到 Dart runtime 报错 `Platform.resolvedExecutable` 为 null（Dart 3.13.5 环境）。该错误发生在工具启动阶段，导致 `flutter analyze`、`flutter test` 和原生构建未能执行；本记录不把它判定为客户端源码已知缺陷。平台目录依据 Flutter stable 3.47.6 的官方模板提供，仍需在正常 SDK 环境实际验证。
+## 构建产物
 
-2026-10-09 部署跟进：用户提供的 NAS 日志确认 `todo-init` 已完成数据目录初始化；`todo-sync` 曾因 NAS 上的 `server/app.py` 读权限不足而重启。另行提供的 v3 私有部署配置将同一后端代码放进启动命令，移除程序文件挂载；本地确认该命令能够启动并初始化 SQLite。用户随后反馈部署已好，但健康检查和实机同步仍待明确验证。已为这个完成初始化的项目提供单容器运行配置，移除一次性初始化服务，以免 NAS 将正常退出的初始化容器标为异常。私有部署配置包含实际密钥，不属于本源码工程或 GitHub 上传内容。
+- [安卓测试 APK ZIP](https://github.com/whytree222/nas-todo/actions/runs/37900998859/artifacts/11602068142)：79,834,623 字节；上传记录 SHA256 为 `45eafdcfe663706be4bc1ceb5760530beae3bed2b63102b11b34ab5856f61fa3`。
+- [Windows 完整目录 ZIP](https://github.com/whytree222/nas-todo/actions/runs/37900998859/artifacts/11602218670)：12,484,942 字节；上传记录 SHA256 为 `89b55dfb5a6d760c52695a1a0cc1564ef1bfe2cdcfb03b8810f3c9587d9a9b53`。
 
-用户已选择在自己的 GitHub 私有仓库使用 Actions 构建客户端。已确认仓库为 private，69 个源码文件已提交到 main；工作流已固定版本并配置 main 分支代码更新自动触发。远程工作流文件与本地一致，实际云端测试和构建结果将在工作流完成后更新。连接器只能列出 PR 触发的运行，需要本次 push 构建的运行页面链接后才能读取任务和日志；上传成功不代表构建成功。
+需登录使用者的 GitHub 账号下载，产物保留至 2026-10-23。哈希来自 GitHub 上传日志和产物元数据；本次将连接器临时下载地址转存到本地时收到 HTTP 403，因此未对下载后的 ZIP 独立验包，也未启动桌面二进制。最终交付使用上述私有 GitHub 下载入口。
 
-需要安装可用的 Flutter stable、Python 3.12+ 与对应安卓 / Windows 编译工具，完成 `scripts/build.ps1` 和 [部署说明](DEPLOY-DX4600.md) 中的验收步骤，再把该工程用于长期保存真实待办。
+Android 使用测试签名；长期使用前需要固定签名密钥以稳定覆盖更新。Windows 应解压完整目录运行，不能只复制 EXE。
+
+## 已修复的问题与部署说明
+
+工作流测试目录的 runner.temp 已移动到合法的步骤环境变量位置；两处代码规范问题已修正；离线保存只在配置 NAS 后创建同步定时器，解决了界面测试结束时遗留无效定时器的问题。上述修改后两端分析、测试和构建通过。
+
+用户使用 DX4600、已有 ZeroTier 网络及 Compose 入口。包含实际密钥的私有部署配置单独交付，不属于源码仓库；最新后续运行配置移除已完成的 todo-init，继续沿用 NAS 原项目 data 目录。源码工程的 compose.yaml 是通用构建部署模板，不替代用户已经部署的私有配置。
+
+本机运行下载的 Dart SDK 曾遇到 Platform.resolvedExecutable 为 null，无法完成本地 Flutter 验证；通过云端正常环境已完成客户端验证与编译，无需在本机重复排查来使用这些产物。
