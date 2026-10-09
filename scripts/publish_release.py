@@ -2,15 +2,20 @@
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import struct
 import subprocess
 import zipfile
 
-BUILD_RUN = 37900998859
-BUILD_SHA = 'bc35fc387f926ffb9370369974961cb257a0ceb2'
-TAG = 'v0.1.0'
+BUILD_RUN = int(os.environ.get('NAS_TODO_BUILD_RUN', '37900998859'))
+BUILD_SHA = os.environ.get('NAS_TODO_BUILD_SHA', 'bc35fc387f926ffb9370369974961cb257a0ceb2')
+VERSION = os.environ.get('NAS_TODO_RELEASE_VERSION', '0.1.0')
+if not re.fullmatch(r'\d+\.\d+\.\d+', VERSION) or not re.fullmatch(r'[0-9a-f]{40}', BUILD_SHA):
+    raise ValueError('Invalid release version or source commit')
+TAG = 'v' + VERSION
+NOTES = f'docs/RELEASE-{TAG}.md'
 
 
 def gh(*args):
@@ -70,9 +75,9 @@ def main():
 
     dist = Path('release-dist')
     dist.mkdir(exist_ok=True)
-    apk_output = dist / 'nas-todo-android-v0.1.0-test.apk'
+    apk_output = dist / f'nas-todo-android-{TAG}-test.apk'
     shutil.copyfile(android, apk_output)
-    windows_output = dist / 'nas-todo-windows-v0.1.0-x64.zip'
+    windows_output = dist / f'nas-todo-windows-{TAG}-x64.zip'
     with zipfile.ZipFile(windows_output, 'w', zipfile.ZIP_DEFLATED) as archive:
         for file in sorted(windows.rglob('*')):
             if file.is_file():
@@ -81,7 +86,7 @@ def main():
         check(archive.testzip() is None, 'Windows ZIP integrity failed')
         check('nas_todo.exe' in archive.namelist(), 'Windows EXE not at archive root')
     guide = dist / 'INSTALL.md'
-    shutil.copyfile('docs/RELEASE-v0.1.0.md', guide)
+    shutil.copyfile(NOTES, guide)
     assets = [apk_output, windows_output, guide]
     hashes = dist / 'SHA256SUMS.txt'
     hashes.write_text(''.join(f'{digest(p)}  {p.name}\n' for p in assets), encoding='utf-8')
@@ -99,7 +104,7 @@ def main():
         tag = next((t for t in tags if t['name'] == TAG), None)
         check(tag is None or tag['commit']['sha'] == BUILD_SHA, 'Existing tag targets different code')
         gh('release', 'create', TAG, '--target', BUILD_SHA, '--draft', '--prerelease',
-           '--title', '私有待办 v0.1.0 测试版', '--notes-file', 'docs/RELEASE-v0.1.0.md')
+           '--title', f'私有待办 {TAG} 测试版', '--notes-file', NOTES)
     gh('release', 'upload', TAG, *(str(p) for p in assets), '--clobber')
     release = next(r for r in api(f'repos/{repo}/releases?per_page=100') if r['tag_name'] == TAG)
     uploaded = {a['name']: a for a in release['assets']}
