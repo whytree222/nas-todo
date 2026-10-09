@@ -45,7 +45,7 @@ NAS、安卓和 Windows 已经加入同一个 ZeroTier 网络，直接沿用现�
 | `.github/workflows/build.yml` | main 分支代码更新或手动触发的 GitHub Actions 构建流程 |
 | `docs/` | 部署、备份、恢复和客户端构建说明 |
 
-GitHub Actions 文件只是构建模板。项目尚未上传到 GitHub，也没有自动发布或上传任何数据。
+源码已上传到使用者的 GitHub 私有仓库，并配置 Actions 构建。实际测试和安装包构建结果仍待确认；NAS 部署密钥、数据库和待办内容没有上传。构建产物不会自动公开发布。
 
 ## 日常使用注意
 
