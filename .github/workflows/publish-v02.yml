@@ -1,0 +1,91 @@
+name: Publish v0.2.0 private test release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-v02.yml']
+
+permissions:
+  contents: write
+  actions: read
+  statuses: write
+
+concurrency:
+  group: publish-v0.2.0
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Report release run
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner, repo: context.repo.repo, sha: context.sha,
+              state: 'pending', context: 'nas-todo/release-v0.2.0',
+              description: 'Preparing private v0.2.0 test release',
+              target_url: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+            });
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Wait for both tested native packages
+        uses: actions/github-script@v8
+        with:
+          script: |
+            for (let attempt = 0; attempt < 30; attempt++) {
+              const {data: run} = await github.rest.actions.getWorkflowRun({
+                owner: context.repo.owner, repo: context.repo.repo, run_id: 37928118785
+              });
+              if (run.head_sha !== 'de89da34e3c6cd4d123a52c8ed50123a8109c073') {
+                throw new Error('Source build commit mismatch');
+              }
+              if (run.status === 'completed') {
+                if (run.conclusion !== 'success') throw new Error('Source build did not pass');
+                return;
+              }
+              await new Promise(resolve => setTimeout(resolve, 20000));
+            }
+            throw new Error('Source build still running; retry publication after it finishes');
+      - name: Download tested Android APK
+        uses: actions/download-artifact@v4
+        with:
+          name: nas-todo-android-test-apk
+          path: release-input/android
+          run-id: 37928118785
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download tested Windows program
+        uses: actions/download-artifact@v4
+        with:
+          name: nas-todo-windows-full-release
+          path: release-input/windows
+          run-id: 37928118785
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify packages and publish private prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NAS_TODO_BUILD_RUN: '37928118785'
+          NAS_TODO_BUILD_SHA: 'de89da34e3c6cd4d123a52c8ed50123a8109c073'
+          NAS_TODO_RELEASE_VERSION: '0.2.0'
+        run: python scripts/publish_release.py
+      - name: Report release result
+        if: always()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const passed = '${{ job.status }}' === 'success';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner, repo: context.repo.repo, sha: context.sha,
+              state: passed ? 'success' : 'failure', context: 'nas-todo/release-v0.2.0',
+              description: passed ? 'Private v0.2.0 test release published' : 'Private release publication failed',
+              target_url: passed
+                ? '${{ github.server_url }}/${{ github.repository }}/releases/tag/v0.2.0'
+                : '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+            });
+
