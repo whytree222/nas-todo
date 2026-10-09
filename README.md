@@ -2,7 +2,7 @@
 
 给绿联 DX4600 使用的个人待办项目：安卓和 Windows 原生客户端共用 Flutter 源码，Docker 同步服务和 SQLite 主数据库放在自己的 NAS 上。
 
-**安卓测试 APK 与 Windows 完整程序包已在 GitHub Actions 构建成功。** 两端静态检查和各 23 项客户端测试通过，18 项服务端测试通过。真实设备安装、系统安全存储及通过 ZeroTier 连接 NAS 的双端同步仍需验收。详见 [验证记录](docs/VALIDATION.md)和[安装说明](docs/CLOUD-BUILD.md)。
+**[v0.1.0 私有测试版已发布](https://github.com/whytree222/nas-todo/releases/tag/v0.1.0)**，包含安卓 APK 和 Windows 完整程序 ZIP。两端静态检查和各 23 项客户端测试通过，18 项服务端测试通过。真实设备安装、系统安全存储及通过 ZeroTier 连接 NAS 的双端同步仍需验收。详见 [验证记录](docs/VALIDATION.md)和[安装说明](docs/RELEASE-v0.1.0.md)。
 
 ## 可以做什么
 
@@ -29,7 +29,7 @@ NAS、安卓和 Windows 已经加入同一个 ZeroTier 网络，直接沿用现�
 ## 从这里开始
 
 1. 按 [DX4600 部署说明](docs/DEPLOY-DX4600.md) 把同步服务装到 NAS，生成自己的访问令牌。
-2. 按 [客户端构建说明](docs/BUILD.md) 编译安卓 APK 和 Windows 完整程序目录。
+2. 从 [Release](https://github.com/whytree222/nas-todo/releases/tag/v0.1.0) 下载安卓 APK 和 Windows 完整程序 ZIP；也可按 [客户端构建说明](docs/BUILD.md) 自行编译。
 3. 在两台设备的“连接设置”中填写同一 NAS 地址和同一访问令牌。
 4. 用 NAS 的 ZeroTier IP 验证 `/health` 和同步，再让手机切到移动网络测试；最后验证断网修改和双端冲突。
 
@@ -43,9 +43,10 @@ NAS、安卓和 Windows 已经加入同一个 ZeroTier 网络，直接沿用现�
 | `.env.example` | 部署配置模板，不含真实令牌 |
 | `scripts/build.ps1` | Windows 本机检查及构建脚本 |
 | `.github/workflows/build.yml` | main 分支代码更新或手动触发的 GitHub Actions 构建流程 |
+| `.github/workflows/publish.yml` | 发布已验证的 v0.1.0 构建，保留私有仓库与测试版标记 |
 | `docs/` | 部署、备份、恢复和客户端构建说明 |
 
-源码已上传到使用者的 GitHub 私有仓库，并配置 Actions 构建；运行 37900998859 的全部任务成功。NAS 部署密钥、数据库和待办内容没有上传。构建产物保存在私有仓库，不会自动公开发布。
+源码已上传到使用者的 GitHub 私有仓库，并配置 Actions 构建；运行 37900998859 的全部任务成功。v0.1.0 安装包已发布到同一私有仓库的 Release，下载需登录有权限的账号。NAS 部署密钥、数据库和待办内容没有上传。
 
 ## 日常使用注意
 
