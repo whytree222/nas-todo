@@ -1,0 +1,26 @@
+# Private deployment material and local databases
+.env
+.env.*
+!.env.example
+data/
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.db-wal
+*.db-shm
+
+# Local runtimes and generated output
+__pycache__/
+*.pyc
+client/.dart_tool/
+client/build/
+client/.flutter-plugins-dependencies
+client/android/local.properties
+client/windows/flutter/ephemeral/
+
+# Personal signing keys
+*.jks
+*.keystore
+client/android/key.properties

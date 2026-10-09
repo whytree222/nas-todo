@@ -1,0 +1,21 @@
+# Flutter platform metadata. Native files were rendered from official templates;
+# this records their template revision, not a successful build or migration.
+version:
+  revision: "5fc346839b5d0eef006ed8404392afb4dfae428d"
+  channel: "stable"
+
+project_type: app
+
+migration:
+  platforms:
+    - platform: root
+      create_revision: 5fc346839b5d0eef006ed8404392afb4dfae428d
+      base_revision: 5fc346839b5d0eef006ed8404392afb4dfae428d
+    - platform: android
+      create_revision: 5fc346839b5d0eef006ed8404392afb4dfae428d
+      base_revision: 5fc346839b5d0eef006ed8404392afb4dfae428d
+    - platform: windows
+      create_revision: 5fc346839b5d0eef006ed8404392afb4dfae428d
+      base_revision: 5fc346839b5d0eef006ed8404392afb4dfae428d
+  unmanaged_files:
+    - lib/main.dart

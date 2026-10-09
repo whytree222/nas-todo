@@ -1,0 +1,36 @@
+services:
+  todo-sync:
+    build:
+      context: ./server
+    image: nas-todo-sync:local
+    restart: unless-stopped
+    init: true
+    user: "1000:1000"
+    environment:
+      NAS_TODO_TOKEN: ${NAS_TODO_TOKEN:?Set a random token of at least 32 characters in .env}
+      NAS_TODO_DB: /data/todo.sqlite
+      NAS_TODO_HOST: 0.0.0.0
+      NAS_TODO_PORT: "8787"
+    ports:
+      - "${NAS_TODO_BIND_IP:-0.0.0.0}:${NAS_TODO_PORT:-8787}:8787"
+    volumes:
+      - type: bind
+        source: ${NAS_TODO_DATA_DIR:-./data}
+        target: /data
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 96
+    mem_limit: 384m
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"

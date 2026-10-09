@@ -1,0 +1,106 @@
+name: Build native test apps
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'client/**'
+      - 'server/**'
+      - '.github/workflows/build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Python backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Backend HTTP and SQLite tests
+        run: python -B -m unittest discover -s server/tests -v
+
+  android:
+    name: Android test APK
+    needs: backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NAS_TODO_TEST_TMP: ${{ runner.temp }}/nas-todo-sync-tests
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.6'
+          cache: true
+      - name: Tool versions
+        run: flutter --version
+      - name: Dependencies
+        run: flutter pub get
+      - name: Gradle wrapper permissions
+        run: chmod +x android/gradlew
+      - name: Static analysis
+        run: flutter analyze
+      - name: Tests
+        run: flutter test
+      - name: Build debug APK for testing
+        run: flutter build apk --debug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nas-todo-android-test-apk
+          path: client/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  windows:
+    name: Windows full program directory
+    needs: backend
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      NAS_TODO_TEST_TMP: ${{ runner.temp }}/nas-todo-sync-tests
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.6'
+          cache: true
+      - name: Tool versions
+        run: flutter --version
+      - name: Dependencies
+        run: flutter pub get
+      - name: Static analysis
+        run: flutter analyze
+      - name: Tests
+        run: flutter test
+      - name: Build Windows release
+        run: flutter build windows --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nas-todo-windows-full-release
+          path: client/build/windows/x64/runner/Release/
+          if-no-files-found: error
+          retention-days: 14
