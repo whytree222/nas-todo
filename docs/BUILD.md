@@ -4,7 +4,7 @@
 
 ## 环境准备
 
-安装 Flutter **stable** 并把 `flutter` 加入 PATH。本工程平台文件依据 Flutter stable **3.47.6** 的官方模板生成，模板提交为 `5fc346839b5d0eef006ed8404392afb4dfae428d`；原生构建尚未验证。Dart 随 Flutter SDK 提供。客户端需要联网从 pub.dev 获取依赖；Android 构建还会下载 Gradle 与 Android 依赖。[Flutter 安装文档](https://docs.flutter.dev/install)
+安装 Flutter **stable** 并把 `flutter` 加入 PATH。本工程平台文件依据 Flutter stable **3.47.6** 的官方模板生成，模板提交为 `5fc346839b5d0eef006ed8404392afb4dfae428d`；Android 和 Windows 原生构建已在 GitHub Actions 中通过。Dart 随 Flutter SDK 提供。客户端需要联网从 pub.dev 获取依赖；Android 构建还会下载 Gradle 与 Android 依赖。[Flutter 安装文档](https://docs.flutter.dev/install)
 
 本工程的客户端集成测试会启动真实的本地 Python 同步服务，因此测试和构建脚本还要求 **Python 3.12 或更新版本**，默认运行 PATH 中的 `python`。如需指定解释器，在构建前设置 `$env:NAS_TODO_TEST_PYTHON = 'C:\你的Python目录\python.exe'`。测试临时数据库默认在 `client/build/test-state/`，可用 `NAS_TODO_TEST_TMP` 指定另一个可写目录；不会连接真实 NAS 或读取部署令牌。
 
@@ -78,6 +78,6 @@ NAS URL 与令牌在运行时输入，不写入 APK、Windows 程序或仓库。
 
 ## 验证范围
 
-**GitHub Actions 中两个平台的 `flutter analyze`、23 项 `flutter test` 和原生构建均已通过。** 本机 Flutter 环境仍受限；云端构建不依赖本机环境。安装包下载和设备验收见 [云端构建说明](CLOUD-BUILD.md)，详细结果见 [验证记录](VALIDATION.md)。
+**GitHub Actions 中两个平台的 `flutter analyze`、31 项 `flutter test` 和原生构建均已通过。** 本机 Flutter 环境仍受限；云端构建不依赖本机环境。安装包下载和设备验收见 [云端构建说明](CLOUD-BUILD.md)，详细结果见 [验证记录](VALIDATION.md)。
 
 静态检查、测试与原生编译通过，不能替代真实设备系统安全存储、两台设备之间以及 DX4600 外网连接的验证。安装后按部署说明执行双端、离线和冲突验收。

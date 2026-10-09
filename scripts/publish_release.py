@@ -1,4 +1,4 @@
-"""Publish only the previously tested v0.1.0 artifacts to a private prerelease."""
+"""Publish a specified successful build to a verified private prerelease."""
 import hashlib
 import json
 import os

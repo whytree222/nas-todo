@@ -1,5 +1,26 @@
 # 验证记录
 
+## 当前 v0.2.0：日历与桌面小组件
+
+2026-10-09，[构建运行 37928118785](https://github.com/whytree222/nas-todo/actions/runs/37928118785) 全部成功，对应提交 `de89da34e3c6cd4d123a52c8ed50123a8109c073`。后端 18 项测试通过，两端各 31 项客户端测试与静态分析通过，Android Kotlin / XML / Flutter APK 及 Windows C++ / Flutter 原生程序编译成功。
+
+新增 8 项测试覆盖日期分组与删除过滤、闰日跨月、选中日期新建、窄屏滚动和未安排选择保留、完成项删除线、桌面勾选及置顶入口、安卓操作重复投递、存储失败不确认、重启后完成状态保留及小组件快照排除备注与凭据。
+
+[发布运行 37928801352](https://github.com/whytree222/nas-todo/actions/runs/37928801352) 成功，[v0.2.0 私有 Release](https://github.com/whytree222/nas-todo/releases/tag/v0.2.0) 包含：
+
+| 安装文件 | 字节数 | SHA256 |
+| --- | --- | --- |
+| nas-todo-android-v0.2.0-test.apk | 160,634,213 | `9ab248584ddcdf6cb3aac602cafe6d23f24f639503901956ab3f2cf583065740` |
+| nas-todo-windows-v0.2.0-x64.zip | 12,360,800 | `afd556038684a86a86fc6b0634f8b46570ae77b9a1d845d659e26d0505258172` |
+
+发布时确认私有仓库、原构建成功及源提交一致；检查 APK ZIP、manifest、字节码与 Flutter 引擎，Windows x64 EXE / DLL、完整资源目录与 ZIP，再核对上传大小及 SHA256。没有在真实手机启动小组件或在真实 Windows 桌面验证拖动置顶。
+
+Android 小组件勾选会唤起主应用，通过同一离线队列持久化，再确认原生动作。Windows 小窗与主界面使用同一个引擎和数据实例，重复启动复用窗口。NAS 后端、任务字段和本机 schema 均保持兼容。仍需实机检查：小组件添加 / 调整尺寸 / 勾选 / 跨日刷新，Windows 拖动 / 调整尺寸 / 置顶，以及勾选结果的双端同步。
+
+Android 长期固定签名及应用内更新尚未配置，测试 APK 不能保证覆盖旧版。迁移前确认没有待上传修改；不要直接卸载含有离线内容的旧版。
+
+## v0.1.0 历史记录
+
 2026-10-09，GitHub Actions 运行 [37900998859](https://github.com/whytree222/nas-todo/actions/runs/37900998859) 的三个任务全部成功。构建对应代码提交 `bc35fc387f926ffb9370369974961cb257a0ceb2`，使用 Flutter stable 3.47.6 / Dart 3.13.5 / Python 3.12；Windows 使用 windows-2022。
 
 | 项目 | 结果 |
