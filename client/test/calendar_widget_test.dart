@@ -134,8 +134,9 @@ void main() {
     await tester.tap(find.text('日历').last);
     await tester.pumpAndSettle();
     expect(tester.widget<FilterChip>(find.byType(FilterChip)).selected, isTrue);
-    await tester.ensureVisible(find.text('未安排任务'));
-    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('未安排任务'), 180,
+      scrollable: find.descendant(of: find.byType(CalendarScreen),
+        matching: find.byType(Scrollable)).first);
     expect(find.text('未安排任务'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -189,3 +190,4 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }
+
