@@ -6,7 +6,6 @@ import '../sync_core.dart';
 import '../task_dates.dart';
 import 'calendar_screen.dart';
 import 'conflict_dialog.dart';
-import 'desktop_todo_screen.dart';
 import 'settings_screen.dart';
 import 'task_editor.dart';
 
@@ -25,16 +24,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String _sort = 'due';
   static const _titles = ['全部待办', '今天', '已完成', '日历', '连接设置'];
   DateTime? _calendarDate = DateTime.now();
-  bool _desktop = false;
-
-  Future<void> _setDesktop(bool value) async {
+  Future<void> _openWidget() async {
     try {
-      await DesktopWindow.setCompact(value);
-      if (mounted) setState(() => _desktop = value);
+      await DesktopWindow.openWidget();
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('桌面小窗切换失败，请重试')));
+          const SnackBar(content: Text('桌面组件打开失败，请重试')));
       }
     }
   }
@@ -128,9 +124,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    if (_desktop) {
-      return DesktopTodoScreen(controller: widget.controller, onExpand: () => _setDesktop(false));
-    }
     return AnimatedBuilder(
       animation: widget.controller,
       builder: (context, _) => LayoutBuilder(
@@ -291,7 +284,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         ),
         if (DesktopWindow.supported)
-          IconButton(tooltip: '桌面小窗', onPressed: () => _setDesktop(true),
+          IconButton(tooltip: '桌面小组件', onPressed: _openWidget,
             icon: const Icon(Icons.picture_in_picture_alt_rounded)),
         if (wide && _page != 4) ...[
           const SizedBox(width: 16),

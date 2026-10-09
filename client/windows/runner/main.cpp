@@ -1,19 +1,26 @@
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
 #include <windows.h>
+#include <algorithm>
 
 #include "flutter_window.h"
 #include "utils.h"
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
-  // One engine owns the offline queue. A second launch reuses that window.
+  auto arguments = GetCommandLineArguments();
+  if (std::find(arguments.begin(), arguments.end(), "--widget-self-test") != arguments.end()) {
+    AttachConsole(ATTACH_PARENT_PROCESS);
+    return DesktopWidget::SelfTest();
+  }
+  const bool widget_only = std::find(arguments.begin(), arguments.end(), "--widget") != arguments.end();
+  // One engine owns the offline queue. A second launch reuses its windows.
   HANDLE singleton = CreateMutex(nullptr, FALSE, L"Local\\cn.privatetodo.app.instance");
   if (singleton && GetLastError() == ERROR_ALREADY_EXISTS) {
     HWND existing = FindWindow(L"CN_PRIVATE_TODO_WINDOW", nullptr);
     if (existing) {
-      ShowWindow(existing, SW_RESTORE);
-      SetForegroundWindow(existing);
+      if (widget_only) PostMessage(existing, FlutterWindow::kOpenWidget, 0, 0);
+      else { ShowWindow(existing, SW_RESTORE); SetForegroundWindow(existing); }
     }
     CloseHandle(singleton);
     return EXIT_SUCCESS;
@@ -35,7 +42,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
-  FlutterWindow window(project);
+  FlutterWindow window(project, widget_only);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
   if (!window.Create(L"私有待办", origin, size)) {

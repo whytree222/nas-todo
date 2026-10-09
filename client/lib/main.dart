@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'app_controller.dart';
 import 'android_widget.dart';
+import 'desktop_widget_bridge.dart';
 import 'ui/home_screen.dart';
 
 Future<void> main() async {
@@ -10,6 +11,7 @@ Future<void> main() async {
   try {
     final controller = await AppController.create();
     await AndroidWidgetBridge.attach(controller);
+    await DesktopWidgetBridge.attach(controller);
     runApp(PrivateTodoApp(controller: controller));
   } catch (error) {
     runApp(_StartupFailure(error: error));
@@ -33,6 +35,7 @@ class _StartupFailureState extends State<_StartupFailure> {
     try {
       final controller = await AppController.create();
       await AndroidWidgetBridge.attach(controller);
+      await DesktopWidgetBridge.attach(controller);
       runApp(PrivateTodoApp(controller: controller));
     } catch (error) {
       if (mounted) {

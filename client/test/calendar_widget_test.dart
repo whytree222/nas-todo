@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nas_todo/android_widget.dart';
 import 'package:nas_todo/app_controller.dart';
@@ -9,7 +8,6 @@ import 'package:nas_todo/main.dart';
 import 'package:nas_todo/sync_core.dart';
 import 'package:nas_todo/task_dates.dart';
 import 'package:nas_todo/ui/calendar_screen.dart';
-import 'package:nas_todo/ui/desktop_todo_screen.dart';
 
 class _Store implements DataStore {
   Map<String, dynamic>? state;
@@ -161,33 +159,4 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Desktop widget completes today tasks and exposes pin and expand controls', (tester) async {
-    _size(tester, const Size(320, 280));
-    final controller = await _controller();
-    addTearDown(controller.dispose);
-    await controller.saveTask(TaskDraft(title: '桌面待办', dueDate: dateKey(DateTime.now())));
-    final id = controller.tasks.single.id;
-    final calls = <MethodCall>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      const MethodChannel('cn.privatetodo/desktop'), (call) async { calls.add(call); return null; });
-    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      const MethodChannel('cn.privatetodo/desktop'), null));
-    bool expanded = false;
-    await tester.pumpWidget(MaterialApp(home: DesktopTodoScreen(controller: controller,
-      onExpand: () async { expanded = true; })));
-    await tester.tap(find.byKey(ValueKey('complete-$id')));
-    await tester.pumpAndSettle();
-    expect(controller.tasks.single.completed, isTrue);
-    expect(tester.widget<Text>(find.text('桌面待办')).style?.decoration, TextDecoration.lineThrough);
-    await tester.tap(find.byTooltip('置顶'));
-    await tester.pumpAndSettle();
-    expect(calls.single.method, 'setPinned');
-    expect(calls.single.arguments, isTrue);
-    await tester.tap(find.byTooltip('打开主界面'));
-    await tester.pumpAndSettle();
-    expect(expanded, isTrue);
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
 }
-
