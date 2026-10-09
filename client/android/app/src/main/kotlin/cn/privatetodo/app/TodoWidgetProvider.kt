@@ -74,7 +74,7 @@ class TodoWidgetProvider : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_open, launch(context, "privatetodo://widget/open"))
             views.removeAllViews(R.id.widget_tasks)
             val height = manager.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 250)
-            val visibleCount = ((height - 100) / 44).coerceIn(2, 8)
+            val visibleCount = ((height - 140) / 44).coerceIn(1, 8)
             for (task in tasks.take(visibleCount)) {
                 val row = RemoteViews(context.packageName, R.layout.todo_widget_row)
                 val done = task.optBoolean("completed")
@@ -100,3 +100,4 @@ class TodoWidgetProvider : AppWidgetProvider() {
         }
     }
 }
+
