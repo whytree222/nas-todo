@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../app_controller.dart';
+import '../desktop_window.dart';
 import '../sync_core.dart';
+import '../task_dates.dart';
+import 'calendar_screen.dart';
 import 'conflict_dialog.dart';
+import 'desktop_todo_screen.dart';
 import 'settings_screen.dart';
 import 'task_editor.dart';
 
@@ -19,7 +23,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _page = 0;
   String? _selectedList;
   String _sort = 'due';
-  static const _titles = ['全部待办', '今天', '已完成', '连接设置'];
+  static const _titles = ['全部待办', '今天', '已完成', '日历', '连接设置'];
+  DateTime? _calendarDate = DateTime.now();
+  bool _desktop = false;
+
+  Future<void> _setDesktop(bool value) async {
+    try {
+      await DesktopWindow.setCompact(value);
+      if (mounted) setState(() => _desktop = value);
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('桌面小窗切换失败，请重试')));
+    }
+  }
+
+  void _newTask() => showTaskEditor(context, widget.controller,
+    listName: _selectedList,
+    initialDueDate: _page == 3 && _calendarDate != null ? dateKey(_calendarDate!) : null);
 
   @override
   void initState() {
@@ -106,6 +126,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    if (_desktop) {
+      return DesktopTodoScreen(controller: widget.controller, onExpand: () => _setDesktop(false));
+    }
     return AnimatedBuilder(
       animation: widget.controller,
       builder: (context, _) => LayoutBuilder(
@@ -139,8 +162,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 _errorBanner(compact: compact),
                               ],
                               SizedBox(height: compact ? 12 : 22),
-                              if (_page == 3)
+                              if (_page == 4)
                                 Expanded(child: SettingsScreen(controller: widget.controller))
+                              else if (_page == 3)
+                                Expanded(child: CalendarScreen(controller: widget.controller,
+                                  initialDate: _calendarDate,
+                                  onDateSelected: (date) => _calendarDate = date))
                               else ...[
                                 _toolbar(wide || constraints.maxWidth >= 600),
                                 if (!veryShort) ...[
@@ -200,11 +227,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ],
               ),
             ),
-            floatingActionButton: !wide && _page != 3
+            floatingActionButton: !wide && _page != 4
                 ? FloatingActionButton.extended(
                     onPressed: widget.controller.editing
                         ? null
-                        : () => showTaskEditor(context, widget.controller, listName: _selectedList),
+                        : _newTask,
                     icon: const Icon(Icons.add_rounded),
                     label: const Text('新建待办'),
                   )
@@ -218,6 +245,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       NavigationDestination(icon: Icon(Icons.checklist_rounded), label: '待办'),
                       NavigationDestination(icon: Icon(Icons.wb_sunny_outlined), label: '今天'),
                       NavigationDestination(icon: Icon(Icons.task_alt_rounded), label: '已完成'),
+                      NavigationDestination(icon: Icon(Icons.calendar_month_outlined), label: '日历'),
                       NavigationDestination(icon: Icon(Icons.settings_outlined), label: '设置'),
                     ],
                   ),
@@ -241,7 +269,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             children: [
               if (!compact) ...[
                 Text(
-                  _page == 3 ? '你的数据，你的 NAS' : '${now.month}月${now.day}日 · 把时间留给重要的事',
+                  _page == 4 ? '你的数据，你的 NAS' : '${now.month}月${now.day}日 · 把时间留给重要的事',
                   style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
                 ),
                 const SizedBox(height: 8),
@@ -252,19 +280,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.8),
               ),
-              if (_page != 3 && !compact) ...[
+              if (_page != 4 && !compact) ...[
                 const SizedBox(height: 8),
                 Text('$activeCount 项进行中 · $completedCount 项已完成', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13)),
               ],
             ],
           ),
         ),
-        if (wide && _page != 3) ...[
+        if (DesktopWindow.supported)
+          IconButton(tooltip: '桌面小窗', onPressed: () => _setDesktop(true),
+            icon: const Icon(Icons.picture_in_picture_alt_rounded)),
+        if (wide && _page != 4) ...[
           const SizedBox(width: 16),
           FilledButton.icon(
             onPressed: widget.controller.editing
                 ? null
-                : () => showTaskEditor(context, widget.controller, listName: _selectedList),
+                : _newTask,
             icon: const Icon(Icons.add_rounded, size: 20),
             label: const Text('新建待办'),
           ),
@@ -312,6 +343,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               controller.tasks.where((task) => !task.completed && task.dueDate == _today).length, () => _selectPage(1)),
           _navItem('已完成', Icons.task_alt_rounded, _page == 2,
               controller.tasks.where((task) => task.completed).length, () => _selectPage(2)),
+          _navItem('日历', Icons.calendar_month_outlined, _page == 3, null, () => _selectPage(3)),
           const SizedBox(height: 28),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -332,7 +364,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               )).toList(),
             ),
           ),
-          _navItem('连接设置', Icons.settings_outlined, _page == 3, null, () => _selectPage(3)),
+          _navItem('连接设置', Icons.settings_outlined, _page == 4, null, () => _selectPage(4)),
           const SizedBox(height: 18),
           Container(
             padding: const EdgeInsets.all(14),

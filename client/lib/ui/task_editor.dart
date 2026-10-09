@@ -10,6 +10,7 @@ Future<void> showTaskEditor(
   AppController controller, {
   Task? task,
   String? listName,
+  String? initialDueDate,
 }) {
   return showDialog<void>(
     context: context,
@@ -17,6 +18,7 @@ Future<void> showTaskEditor(
       controller: controller,
       task: task,
       initialListName: listName,
+      initialDueDate: initialDueDate,
     ),
   );
 }
@@ -27,11 +29,13 @@ class TaskEditorDialog extends StatefulWidget {
     required this.controller,
     this.task,
     this.initialListName,
+    this.initialDueDate,
   });
 
   final AppController controller;
   final Task? task;
   final String? initialListName;
+  final String? initialDueDate;
 
   @override
   State<TaskEditorDialog> createState() => _TaskEditorDialogState();
@@ -60,7 +64,7 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
     _list = TextEditingController(
       text: widget.task?.listName ?? widget.initialListName ?? '收件箱',
     );
-    _dueDate = widget.task?.dueDate;
+    _dueDate = widget.task != null ? widget.task!.dueDate : widget.initialDueDate;
     _priority = widget.task?.priority ?? 0;
   }
 

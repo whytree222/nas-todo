@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'app_controller.dart';
+import 'android_widget.dart';
 import 'ui/home_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     final controller = await AppController.create();
+    await AndroidWidgetBridge.attach(controller);
     runApp(PrivateTodoApp(controller: controller));
   } catch (error) {
     runApp(_StartupFailure(error: error));
@@ -30,6 +32,7 @@ class _StartupFailureState extends State<_StartupFailure> {
     setState(() => _reading = true);
     try {
       final controller = await AppController.create();
+      await AndroidWidgetBridge.attach(controller);
       runApp(PrivateTodoApp(controller: controller));
     } catch (error) {
       if (mounted) {

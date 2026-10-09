@@ -7,6 +7,17 @@
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
+  // One engine owns the offline queue. A second launch reuses that window.
+  HANDLE singleton = CreateMutex(nullptr, FALSE, L"Local\\cn.privatetodo.app.instance");
+  if (singleton && GetLastError() == ERROR_ALREADY_EXISTS) {
+    HWND existing = FindWindow(L"CN_PRIVATE_TODO_WINDOW", nullptr);
+    if (existing) {
+      ShowWindow(existing, SW_RESTORE);
+      SetForegroundWindow(existing);
+    }
+    CloseHandle(singleton);
+    return EXIT_SUCCESS;
+  }
   // Attach to console when present (e.g., 'flutter run') or create a
   // new console when running with a debugger.
   if (!::AttachConsole(ATTACH_PARENT_PROCESS) && ::IsDebuggerPresent()) {
@@ -39,5 +50,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   }
 
   ::CoUninitialize();
+  if (singleton) CloseHandle(singleton);
   return EXIT_SUCCESS;
 }
