@@ -169,6 +169,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               else if (_page == 3)
                                 Expanded(child: CalendarScreen(controller: widget.controller,
                                   initialDate: _calendarDate,
+                                  initialUnscheduled: _calendarDate == null,
                                   onDateSelected: (date) => _calendarDate = date))
                               else ...[
                                 _toolbar(wide || constraints.maxWidth >= 600),

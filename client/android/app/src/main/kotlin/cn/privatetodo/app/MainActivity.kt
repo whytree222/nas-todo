@@ -69,6 +69,8 @@ class MainActivity : FlutterActivity() {
         if (intent.action != TodoWidgetProvider.COMPLETE) return
         val taskId = intent.getStringExtra("task_id") ?: return
         val prefs = getSharedPreferences(TodoWidgetProvider.PREFS, MODE_PRIVATE)
+        val auth = prefs.getString("widget_auth", null) ?: return
+        if (intent.getStringExtra("widget_auth") != auth) return
         val actions = JSONArray(prefs.getString("actions", "[]"))
         actions.put(JSONObject().put("action_id", UUID.randomUUID().toString())
             .put("task_id", taskId).put("completed", intent.getBooleanExtra("completed", true)))

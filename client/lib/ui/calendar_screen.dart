@@ -6,9 +6,10 @@ import 'agenda_task.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key, required this.controller,
-    this.initialDate, this.onDateSelected});
+    this.initialDate, this.initialUnscheduled = false, this.onDateSelected});
   final AppController controller;
   final DateTime? initialDate;
+  final bool initialUnscheduled;
   final ValueChanged<DateTime?>? onDateSelected;
 
   @override
@@ -26,6 +27,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final now = widget.initialDate ?? DateTime.now();
     _selected = DateTime(now.year, now.month, now.day);
     _month = DateTime(now.year, now.month);
+    _unscheduled = widget.initialUnscheduled;
   }
 
   void _select(DateTime day) {

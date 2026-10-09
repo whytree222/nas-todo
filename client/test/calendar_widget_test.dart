@@ -126,9 +126,16 @@ void main() {
     await tester.tap(find.text('日历').last);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.byType(FilterChip));
+    await tester.pumpAndSettle();
     await tester.tap(find.byType(FilterChip));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('日历').last);
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilterChip>(find.byType(FilterChip)).selected, isTrue);
     await tester.ensureVisible(find.text('未安排任务'));
+    await tester.pumpAndSettle();
     expect(find.text('未安排任务'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

@@ -14,6 +14,7 @@ import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 class TodoWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
@@ -44,7 +45,14 @@ class TodoWidgetProvider : AppWidgetProvider() {
             val intent = Intent(context, MainActivity::class.java)
                 .setData(Uri.parse(uri))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            if (id != null) intent.setAction(COMPLETE).putExtra("task_id", id).putExtra("completed", completed)
+            if (id != null) {
+                val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                val auth = prefs.getString("widget_auth", null) ?: UUID.randomUUID().toString().also {
+                    prefs.edit().putString("widget_auth", it).commit()
+                }
+                intent.setAction(COMPLETE).putExtra("task_id", id).putExtra("completed", completed)
+                    .putExtra("widget_auth", auth)
+            }
             return PendingIntent.getActivity(context, 0, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         }
