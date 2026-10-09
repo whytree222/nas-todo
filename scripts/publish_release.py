@@ -1,0 +1,129 @@
+"""Publish only the previously tested v0.1.0 artifacts to a private prerelease."""
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import struct
+import subprocess
+import zipfile
+
+BUILD_RUN = 37900998859
+BUILD_SHA = 'bc35fc387f926ffb9370369974961cb257a0ceb2'
+TAG = 'v0.1.0'
+
+
+def gh(*args):
+    result = subprocess.run(['gh', *args], text=True, capture_output=True)
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip())
+    return result.stdout
+
+
+def api(path):
+    return json.loads(gh('api', path))
+
+
+def check(condition, message):
+    if not condition:
+        raise RuntimeError(message)
+
+
+def digest(path):
+    with path.open('rb') as source:
+        return hashlib.file_digest(source, 'sha256').hexdigest()
+
+
+def verify_pe(path):
+    with path.open('rb') as source:
+        check(source.read(2) == b'MZ', f'Invalid executable: {path}')
+        source.seek(0x3c)
+        offset = struct.unpack('<I', source.read(4))[0]
+        source.seek(offset)
+        check(source.read(4) == b'PE\0\0', f'Invalid PE header: {path}')
+        check(struct.unpack('<H', source.read(2))[0] == 0x8664,
+              f'Expected Windows x64: {path}')
+
+
+def main():
+    repo = os.environ['GH_REPO']
+    check(api(f'repos/{repo}')['private'], 'Publication requires a private repository')
+    run = api(f'repos/{repo}/actions/runs/{BUILD_RUN}')
+    check(run['conclusion'] == 'success' and run['head_sha'] == BUILD_SHA,
+          'Source build must be successful at the verified commit')
+
+    android = Path('release-input/android/app-debug.apk')
+    check(android.is_file(), 'Android APK missing')
+    with zipfile.ZipFile(android) as apk:
+        check(apk.testzip() is None, 'APK ZIP integrity failed')
+        names = set(apk.namelist())
+        check({'AndroidManifest.xml', 'classes.dex'} <= names,
+              'APK manifest or bytecode missing')
+        check(any(n.endswith('/libflutter.so') for n in names), 'Flutter engine missing')
+    windows = Path('release-input/windows')
+    for name in ('nas_todo.exe', 'flutter_windows.dll', 'data/icudtl.dat'):
+        check((windows / name).is_file(), f'Windows file missing: {name}')
+    check((windows / 'data/flutter_assets').is_dir(), 'Flutter assets missing')
+    verify_pe(windows / 'nas_todo.exe')
+    verify_pe(windows / 'flutter_windows.dll')
+    print('Verified successful source build, APK integrity and complete Windows x64 directory')
+
+    dist = Path('release-dist')
+    dist.mkdir(exist_ok=True)
+    apk_output = dist / 'nas-todo-android-v0.1.0-test.apk'
+    shutil.copyfile(android, apk_output)
+    windows_output = dist / 'nas-todo-windows-v0.1.0-x64.zip'
+    with zipfile.ZipFile(windows_output, 'w', zipfile.ZIP_DEFLATED) as archive:
+        for file in sorted(windows.rglob('*')):
+            if file.is_file():
+                archive.write(file, file.relative_to(windows).as_posix())
+    with zipfile.ZipFile(windows_output) as archive:
+        check(archive.testzip() is None, 'Windows ZIP integrity failed')
+        check('nas_todo.exe' in archive.namelist(), 'Windows EXE not at archive root')
+    guide = dist / 'INSTALL.md'
+    shutil.copyfile('docs/RELEASE-v0.1.0.md', guide)
+    assets = [apk_output, windows_output, guide]
+    hashes = dist / 'SHA256SUMS.txt'
+    hashes.write_text(''.join(f'{digest(p)}  {p.name}\n' for p in assets), encoding='utf-8')
+    assets.append(hashes)
+    expected = {p.name: (p.stat().st_size, 'sha256:' + digest(p)) for p in assets}
+
+    releases = api(f'repos/{repo}/releases?per_page=100')
+    existing = next((r for r in releases if r['tag_name'] == TAG), None)
+    if existing:
+        check(existing['draft'] and existing['prerelease']
+              and existing['target_commitish'] == BUILD_SHA,
+              'An existing non-matching or published release will not be overwritten')
+    else:
+        tags = api(f'repos/{repo}/tags?per_page=100')
+        tag = next((t for t in tags if t['name'] == TAG), None)
+        check(tag is None or tag['commit']['sha'] == BUILD_SHA, 'Existing tag targets different code')
+        gh('release', 'create', TAG, '--target', BUILD_SHA, '--draft', '--prerelease',
+           '--title', '私有待办 v0.1.0 测试版', '--notes-file', 'docs/RELEASE-v0.1.0.md')
+    gh('release', 'upload', TAG, *(str(p) for p in assets), '--clobber')
+    release = next(r for r in api(f'repos/{repo}/releases?per_page=100') if r['tag_name'] == TAG)
+    uploaded = {a['name']: a for a in release['assets']}
+    check(set(uploaded) == set(expected), 'Unexpected or missing release assets')
+    for name, (size, sha256) in expected.items():
+        asset = uploaded[name]
+        check(asset['state'] == 'uploaded' and asset['size'] == size,
+              f'Upload incomplete: {name}')
+        check(asset.get('digest') == sha256, f'Uploaded SHA256 mismatch: {name}')
+    gh('release', 'edit', TAG, '--draft=false', '--prerelease')
+    published = api(f'repos/{repo}/releases/tags/{TAG}')
+    check(not published['draft'] and published['prerelease'], 'Prerelease publication failed')
+    check(api(f'repos/{repo}/commits/{TAG}')['sha'] == BUILD_SHA, 'Published tag source mismatch')
+    print('PRIVATE_RELEASE_VERIFIED ' + json.dumps({
+        'url': published['html_url'], 'tag': TAG, 'source_sha': BUILD_SHA,
+        'private': True, 'prerelease': published['prerelease'],
+        'assets': [{k: a[k] for k in ('name', 'size', 'digest', 'browser_download_url')}
+                   for a in published['assets']],
+    }, ensure_ascii=False))
+    summary = os.environ.get('GITHUB_STEP_SUMMARY')
+    if summary:
+        with open(summary, 'a', encoding='utf-8') as output:
+            output.write(f"Private test release published: {published['html_url']}\n")
+
+
+if __name__ == '__main__':
+    main()
