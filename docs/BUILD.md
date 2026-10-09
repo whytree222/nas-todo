@@ -78,6 +78,8 @@ NAS URL 与令牌在运行时输入，不写入 APK、Windows 程序或仓库。
 
 ## 验证范围
 
-**GitHub Actions 中两个平台的 `flutter analyze`、31 项 `flutter test` 和原生构建均已通过。** 本机 Flutter 环境仍受限；云端构建不依赖本机环境。安装包下载和设备验收见 [云端构建说明](CLOUD-BUILD.md)，详细结果见 [验证记录](VALIDATION.md)。
+**GitHub Actions 中两个平台的 `flutter analyze`、33 项 `flutter test` 和原生构建均已通过。** 本机 Flutter 环境仍受限；云端构建不依赖本机环境。安装包下载和设备验收见 [云端构建说明](CLOUD-BUILD.md)，详细结果见 [验证记录](VALIDATION.md)。
 
 静态检查、测试与原生编译通过，不能替代真实设备系统安全存储、两台设备之间以及 DX4600 外网连接的验证。安装后按部署说明执行双端、离线和冲突验收。
+
+Windows 构建脚本会把 desktop-widget.cmd 放入完整程序目录。云端还执行真实原生窗口的透明属性、四边收起、悬停展开及主界面关闭检查；使用方法见 [v0.3.0 安装说明](RELEASE-v0.3.0.md)。

@@ -1,6 +1,21 @@
 # 验证记录
 
-## 当前 v0.2.0：日历与桌面小组件
+## 当前 v0.3.0：独立透明 Windows 组件
+
+2026-10-09，[构建 37933330471](https://github.com/whytree222/nas-todo/actions/runs/37933330471) 全部成功，源提交 `429a769ec07c9632f587371f94abfca89aaf0c3f`。18 项后端测试、两端静态分析和各 33 项客户端测试、Android APK 与 Windows x64 原生编译通过。
+
+Windows 发布程序实际运行两组原生检查：透明色键属性、无父窗口、直接勾选回调、四边收起后的标签留在工作区内、悬停展开；以及真实 Flutter 主界面关闭后隐藏且组件仍可见、重新打开主界面、关闭组件后主界面仍存在。离线保存测试验证重启保留、重复请求幂等、保存失败回滚与重试，并检查组件快照不包含备注和连接凭据。
+
+[发布 37933601078](https://github.com/whytree222/nas-todo/actions/runs/37933601078) 成功，[v0.3.0 私有 Release](https://github.com/whytree222/nas-todo/releases/tag/v0.3.0) 包含 APK、Windows 完整 ZIP（含 desktop-widget.cmd）、INSTALL.md 与 SHA256SUMS.txt。发布检查仓库私有、成功构建与源提交一致、APK 完整性、Windows x64 / DLL / 资源 / 独立启动器，并核对全部上传文件的大小与 SHA256。
+
+检查在 GitHub Windows runner 上运行，不替代使用者实际壁纸、多显示器、系统 DPI 和 ZeroTier / NAS 双端同步验收。窗口和主界面共用后台进程及原离线队列；无系统 Widgets 面板扩展、开机自启或应用内自动更新。Android 仍为测试签名。
+
+| v0.3.0 文件 | 字节数 | SHA256 |
+| --- | --- | --- |
+| nas-todo-windows-v0.3.0-x64.zip | 12,383,966 | `49cdd63b9362b1b26f66d705da62ffd91391f040bd8068628dfec8337d531439` |
+| nas-todo-android-v0.3.0-test.apk | 160,634,961 | `879fa6a4c65f8343df3e864353018b309a347da4cad6e1240b452577e9c311dd` |
+
+## v0.2.0 历史版本：日历与桌面小组件
 
 2026-10-09，[构建运行 37928118785](https://github.com/whytree222/nas-todo/actions/runs/37928118785) 全部成功，对应提交 `de89da34e3c6cd4d123a52c8ed50123a8109c073`。后端 18 项测试通过，两端各 31 项客户端测试与静态分析通过，Android Kotlin / XML / Flutter APK 及 Windows C++ / Flutter 原生程序编译成功。
 

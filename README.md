@@ -2,7 +2,7 @@
 
 给绿联 DX4600 使用的个人待办项目：安卓和 Windows 原生客户端共用 Flutter 源码，Docker 同步服务和 SQLite 主数据库放在自己的 NAS 上。
 
-**[v0.2.0 私有测试版已发布](https://github.com/whytree222/nas-todo/releases/tag/v0.2.0)**，新增任务日历、安卓桌面小组件及 Windows 常驻小窗，包含 APK 和 Windows 完整程序 ZIP。两端静态检查、各 31 项客户端测试和 18 项服务端测试通过。真实设备小组件、原生拖动置顶及 NAS 双端同步仍需验收。详见 [验证记录](docs/VALIDATION.md)和[安装说明](docs/RELEASE-v0.2.0.md)。
+**[v0.3.0 私有测试版已发布](https://github.com/whytree222/nas-todo/releases/tag/v0.3.0)**，包含任务日历、安卓桌面小组件及 Windows 独立透明桌面组件，包含 APK 和 Windows 完整程序 ZIP。两端静态检查、各 33 项客户端测试和 18 项服务端测试通过。Windows 透明、四边收起、悬停展开及主界面关闭检查已通过；实际设备壁纸效果与 NAS 双端同步仍需验收。详见 [验证记录](docs/VALIDATION.md)和[安装说明](docs/RELEASE-v0.3.0.md)。
 
 ## 可以做什么
 
@@ -10,7 +10,7 @@
 - 截止日期、优先级和排序。
 - 月历与每日待办：按日期查看任务，完成项保留并显示删除线，未安排日期的任务单独查看。
 - 安卓桌面“今天”小组件：可调整大小，勾选时打开应用保存离线修改。
-- Windows 常驻小窗：拖动、调整尺寸、置顶、直接勾选完成，以及展开回主界面。
+- Windows 独立透明桌面组件：直接运行 desktop-widget.cmd，关闭主界面后仍可使用；拖动、调整大小、置顶、贴四边收起和悬停展开，并记住位置与选项。
 - 先保存本机，断网时照常编辑；联网后上传到 NAS，并拉取其他设备的修改。
 - 手动同步、应用打开期间定时同步、回到前台时同步；显示待上传数量和同步结果。
 - 两台设备同时修改同一条待办时显示冲突，由你选择本机或 NAS 版本。
@@ -32,7 +32,7 @@ NAS、安卓和 Windows 已经加入同一个 ZeroTier 网络，直接沿用现�
 ## 从这里开始
 
 1. 按 [DX4600 部署说明](docs/DEPLOY-DX4600.md) 把同步服务装到 NAS，生成自己的访问令牌。
-2. 从 [Release](https://github.com/whytree222/nas-todo/releases/tag/v0.2.0) 下载安卓 APK 和 Windows 完整程序 ZIP；也可按 [客户端构建说明](docs/BUILD.md) 自行编译。
+2. 从 [Release](https://github.com/whytree222/nas-todo/releases/tag/v0.3.0) 下载安卓 APK 和 Windows 完整程序 ZIP；也可按 [客户端构建说明](docs/BUILD.md) 自行编译。
 3. 在两台设备的“连接设置”中填写同一 NAS 地址和同一访问令牌。
 4. 用 NAS 的 ZeroTier IP 验证 `/health` 和同步，再让手机切到移动网络测试；最后验证断网修改和双端冲突。
 
@@ -47,10 +47,10 @@ NAS、安卓和 Windows 已经加入同一个 ZeroTier 网络，直接沿用现�
 | `scripts/build.ps1` | Windows 本机检查及构建脚本 |
 | `.github/workflows/build.yml` | main 分支代码更新或手动触发的 GitHub Actions 构建流程 |
 | `.github/workflows/publish.yml` | 发布已验证的 v0.1.0 构建，保留私有仓库与测试版标记 |
-| `.github/workflows/publish-v02.yml` | 等待已验证的 v0.2.0 两端构建成功，再发布私有测试版 |
+| `.github/workflows/publish-v03.yml` | 等待已验证的 v0.3.0 两端构建成功，再发布私有测试版 |
 | `docs/` | 部署、备份、恢复和客户端构建说明 |
 
-源码已上传到使用者的 GitHub 私有仓库，并配置 Actions 构建；运行 37928118785 的全部任务成功。v0.2.0 安装包已发布到同一私有仓库的 Release，下载需登录有权限的账号。NAS 部署密钥、数据库和待办内容没有上传。
+源码已上传到使用者的 GitHub 私有仓库，并配置 Actions 构建；运行 37933330471 的全部任务成功。v0.3.0 安装包已发布到同一私有仓库的 Release，下载需登录有权限的账号。NAS 部署密钥、数据库和待办内容没有上传。
 
 ## 日常使用注意
 
