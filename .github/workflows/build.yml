@@ -30,8 +30,6 @@ jobs:
     needs: backend
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      NAS_TODO_TEST_TMP: ${{ runner.temp }}/nas-todo-sync-tests
     defaults:
       run:
         working-directory: client
@@ -58,6 +56,8 @@ jobs:
       - name: Static analysis
         run: flutter analyze
       - name: Tests
+        env:
+          NAS_TODO_TEST_TMP: ${{ runner.temp }}/nas-todo-sync-tests
         run: flutter test
       - name: Build debug APK for testing
         run: flutter build apk --debug
@@ -73,8 +73,6 @@ jobs:
     needs: backend
     runs-on: windows-2022
     timeout-minutes: 45
-    env:
-      NAS_TODO_TEST_TMP: ${{ runner.temp }}/nas-todo-sync-tests
     defaults:
       run:
         working-directory: client
@@ -95,6 +93,8 @@ jobs:
       - name: Static analysis
         run: flutter analyze
       - name: Tests
+        env:
+          NAS_TODO_TEST_TMP: ${{ runner.temp }}/nas-todo-sync-tests
         run: flutter test
       - name: Build Windows release
         run: flutter build windows --release
