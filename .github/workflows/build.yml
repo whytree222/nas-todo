@@ -17,13 +17,38 @@ jobs:
     name: Python backend tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      statuses: write
     steps:
+      - name: Publish cloud run link
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner, repo: context.repo.repo, sha: context.sha,
+              state: 'pending', context: 'nas-todo/backend',
+              description: 'Backend checks started; open cloud build',
+              target_url: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+            });
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Backend HTTP and SQLite tests
         run: python -B -m unittest discover -s server/tests -v
+      - name: Report backend result
+        if: always()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const passed = '${{ job.status }}' === 'success';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner, repo: context.repo.repo, sha: context.sha,
+              state: passed ? 'success' : 'failure', context: 'nas-todo/backend',
+              description: passed ? 'Backend checks passed; client builds run separately' : 'Backend checks failed',
+              target_url: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+            });
 
   android:
     name: Android test APK

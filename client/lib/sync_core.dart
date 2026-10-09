@@ -163,7 +163,7 @@ class SyncEngine {
 
   Future<T> _serial<T>(Future<T> Function() action) {
     final future = _tail.then((_) => action());
-    _tail = future.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    _tail = future.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return future;
   }
 

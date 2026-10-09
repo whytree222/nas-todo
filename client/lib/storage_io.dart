@@ -18,7 +18,9 @@ class FileDataStore implements DataStore {
         final state = Map<String, dynamic>.from(jsonDecode(await candidate.readAsString()) as Map);
         if (state['schema'] != 1 || state['tasks'] is! List ||
             state['operations'] is! List || state['conflicts'] is! List ||
-            state['cursor'] is! int) throw const FormatException('Invalid local state');
+            state['cursor'] is! int) {
+          throw const FormatException('Invalid local state');
+        }
         for (final raw in state['tasks'] as List) {
           Task.fromJson(Map<String, dynamic>.from(raw as Map));
         }
