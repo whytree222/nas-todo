@@ -20,7 +20,17 @@
 - [安卓测试 APK ZIP](https://github.com/whytree222/nas-todo/actions/runs/37900998859/artifacts/11602068142)：79,834,623 字节；上传记录 SHA256 为 `45eafdcfe663706be4bc1ceb5760530beae3bed2b63102b11b34ab5856f61fa3`。
 - [Windows 完整目录 ZIP](https://github.com/whytree222/nas-todo/actions/runs/37900998859/artifacts/11602218670)：12,484,942 字节；上传记录 SHA256 为 `89b55dfb5a6d760c52695a1a0cc1564ef1bfe2cdcfb03b8810f3c9587d9a9b53`。
 
-需登录使用者的 GitHub 账号下载，产物保留至 2026-10-23。哈希来自 GitHub 上传日志和产物元数据；本次将连接器临时下载地址转存到本地时收到 HTTP 403，因此未对下载后的 ZIP 独立验包，也未启动桌面二进制。最终交付使用上述私有 GitHub 下载入口。
+Actions 产物需登录有权限的 GitHub 账号下载，保留至 2026-10-23。上述哈希对应原始 Actions ZIP，不是 Release 中重新打包后的文件。本机转存临时下载地址曾收到 HTTP 403；随后发布流程直接从 Actions 下载并完成了下述验包。
+
+## 私有 Release
+
+[发布运行 37904737671](https://github.com/whytree222/nas-todo/actions/runs/37904737671) 成功；[v0.1.0 Release](https://github.com/whytree222/nas-todo/releases/tag/v0.1.0) 已发布为测试版，仓库保持私有。标签指向上述实际构建代码提交。
+
+发布流程确认原构建成功与代码提交一致，检查 APK ZIP 完整性、manifest、字节码和 Flutter 引擎，确认 Windows EXE / DLL 为 x64 且资源目录完整，再验证完整 ZIP、所有上传文件大小与 GitHub SHA256。没有在实机启动二进制。
+
+- Android APK：160,591,403 字节；SHA256 `ca65e98c1f3c7b08a11bca0fad3442904c4af3fa168445f3dae577d49fadbdf1`。
+- Windows 完整 ZIP：12,290,046 字节；SHA256 `c9e4c2efb47e9e346f81fe06e22b985bc5514e3c5f656866e3a707db5dbbd2fd`。
+- Release 同时包含 INSTALL.md 与 SHA256SUMS.txt，作为固定安装入口。
 
 Android 使用测试签名；长期使用前需要固定签名密钥以稳定覆盖更新。Windows 应解压完整目录运行，不能只复制 EXE。
 
