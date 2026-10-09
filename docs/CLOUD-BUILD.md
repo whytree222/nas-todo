@@ -1,5 +1,7 @@
 # 私有仓库云端编译
 
+运行 [37900998859](https://github.com/whytree222/nas-todo/actions/runs/37900998859) 的后端、安卓和 Windows 任务已全部成功。可直接下载：[安卓测试 APK ZIP](https://github.com/whytree222/nas-todo/actions/runs/37900998859/artifacts/11602068142)、[Windows 完整程序 ZIP](https://github.com/whytree222/nas-todo/actions/runs/37900998859/artifacts/11602218670)。登录自己的 GitHub 账号后下载，产物保留至 2026-10-23。
+
 源码通过自己的 GitHub 私有仓库交给 Actions 编译。部署密钥和 NAS 数据不需要提供给 GitHub，客户端安装后再填写。
 
 ## 仓库与上传
@@ -28,6 +30,6 @@
 
 先测试安卓新增后 Windows 拉取，再测试 Windows 修改后安卓拉取。然后断网编辑并重新联网同步，最后让两端离线修改同一条待办，确认冲突选择能够正确保留所选版本。
 
-只有构建和上述验收都完成，才能确认两端应用实际可用。本说明不代表已经生成安装包。
+安装包已经构建生成；仍需完成上述实机验收，才能确认两端在自己的 NAS 和 ZeroTier 环境中实际可用。
 
 官方操作说明：https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow
