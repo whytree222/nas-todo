@@ -2,7 +2,7 @@
 
 给绿联 DX4600 使用的个人待办项目：安卓和 Windows 原生客户端共用 Flutter 源码，Docker 同步服务和 SQLite 主数据库放在自己的 NAS 上。
 
-**当前交付是供继续验证、部署和编译的源码工程。客户端源码尚未通过 Flutter 静态分析与测试，也没有构建出 APK 或 Windows 安装包。** 本地工具环境限制阻止了客户端验证；NAS 部署、编译、实机安装和外网连通仍需在对应环境完成。详见 [验证记录](docs/VALIDATION.md)。
+**安卓测试 APK 与 Windows 完整程序包已在 GitHub Actions 构建成功。** 两端静态检查和各 23 项客户端测试通过，18 项服务端测试通过。真实设备安装、系统安全存储及通过 ZeroTier 连接 NAS 的双端同步仍需验收。详见 [验证记录](docs/VALIDATION.md)和[安装说明](docs/CLOUD-BUILD.md)。
 
 ## 可以做什么
 
@@ -45,7 +45,7 @@ NAS、安卓和 Windows 已经加入同一个 ZeroTier 网络，直接沿用现�
 | `.github/workflows/build.yml` | main 分支代码更新或手动触发的 GitHub Actions 构建流程 |
 | `docs/` | 部署、备份、恢复和客户端构建说明 |
 
-源码已上传到使用者的 GitHub 私有仓库，并配置 Actions 构建。实际测试和安装包构建结果仍待确认；NAS 部署密钥、数据库和待办内容没有上传。构建产物不会自动公开发布。
+源码已上传到使用者的 GitHub 私有仓库，并配置 Actions 构建；运行 37900998859 的全部任务成功。NAS 部署密钥、数据库和待办内容没有上传。构建产物保存在私有仓库，不会自动公开发布。
 
 ## 日常使用注意
 
