@@ -69,6 +69,8 @@ def main():
     for name in ('nas_todo.exe', 'flutter_windows.dll', 'data/icudtl.dat'):
         check((windows / name).is_file(), f'Windows file missing: {name}')
     check((windows / 'data/flutter_assets').is_dir(), 'Flutter assets missing')
+    if tuple(map(int, VERSION.split('.'))) >= (0, 3, 0):
+        check((windows / 'desktop-widget.cmd').is_file(), 'Independent widget launcher missing')
     verify_pe(windows / 'nas_todo.exe')
     verify_pe(windows / 'flutter_windows.dll')
     print('Verified successful source build, APK integrity and complete Windows x64 directory')

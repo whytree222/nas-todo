@@ -69,6 +69,9 @@ bool DesktopWidget::Create(bool load_settings) {
       nullptr, nullptr, cls.hInstance, this);
   if (!hwnd_) return false;
   if (!SetLayeredWindowAttributes(hwnd_, kClear, 255, LWA_COLORKEY)) return false;
+  // Stored sizes are physical pixels; keep controls usable after a DPI change.
+  SetWindowPos(hwnd_, nullptr, 0, 0, std::max(width, Dp(300)), std::max(height, Dp(240)),
+      SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
   Snap();
   SetWindowPos(hwnd_, pinned_ ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0,
       SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
@@ -291,7 +294,8 @@ LRESULT DesktopWidget::Message(UINT message, WPARAM wp, LPARAM lp) {
     case WM_ENTERSIZEMOVE: Reveal(); dragging_ = true; return 0;
     case WM_EXITSIZEMOVE: dragging_ = false; Snap(); Save(); return 0;
     case WM_SIZE: InvalidateRect(hwnd_, nullptr, TRUE); return 0;
-    case WM_DISPLAYCHANGE: Reveal(); Snap(); return 0;
+    case WM_DISPLAYCHANGE:
+    case WM_SETTINGCHANGE: Reveal(); Snap(); return 0;
     case WM_DPICHANGED: {
       Reveal(); const auto* rect = reinterpret_cast<RECT*>(lp);
       SetWindowPos(hwnd_, nullptr, rect->left, rect->top, rect->right - rect->left,

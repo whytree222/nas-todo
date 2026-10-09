@@ -16,6 +16,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   const bool widget_only = std::find(arguments.begin(), arguments.end(), "--widget") != arguments.end();
   // One engine owns the offline queue. A second launch reuses its windows.
   HANDLE singleton = CreateMutex(nullptr, FALSE, L"Local\\cn.privatetodo.app.instance");
+  if (!singleton) return EXIT_FAILURE;
   if (singleton && GetLastError() == ERROR_ALREADY_EXISTS) {
     HWND existing = FindWindow(L"CN_PRIVATE_TODO_WINDOW", nullptr);
     if (existing) {

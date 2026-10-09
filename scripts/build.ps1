@@ -57,6 +57,7 @@ try {
     }
     if ($Target -eq 'Windows' -or $Target -eq 'All') {
         Invoke-Flutter -Arguments @('build', 'windows', '--release')
+        Copy-Item -LiteralPath 'windows/desktop-widget.cmd' -Destination 'build/windows/x64/runner/Release/desktop-widget.cmd'
         Write-Host "Copy this entire directory: $(Join-Path $clientDirectory 'build/windows/x64/runner/Release')"
     }
     Write-Host 'Checks completed successfully.'
