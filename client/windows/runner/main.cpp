@@ -14,6 +14,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     return DesktopWidget::SelfTest();
   }
   const bool widget_only = std::find(arguments.begin(), arguments.end(), "--widget") != arguments.end();
+  const bool host_self_test = std::find(arguments.begin(), arguments.end(), "--widget-host-self-test") != arguments.end();
   // One engine owns the offline queue. A second launch reuses its windows.
   HANDLE singleton = CreateMutex(nullptr, FALSE, L"Local\\cn.privatetodo.app.instance");
   if (!singleton) return EXIT_FAILURE;
@@ -43,7 +44,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
-  FlutterWindow window(project, widget_only);
+  FlutterWindow window(project, widget_only, host_self_test);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
   if (!window.Create(L"私有待办", origin, size)) {
@@ -59,5 +60,5 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   ::CoUninitialize();
   if (singleton) CloseHandle(singleton);
-  return EXIT_SUCCESS;
+  return static_cast<int>(msg.wParam);
 }

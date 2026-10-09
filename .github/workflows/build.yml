@@ -130,6 +130,13 @@ jobs:
           Write-Output 'Native widget checks passed: transparency, independent window, completion, four edges and hover reveal'
       - name: Include standalone widget launcher
         run: Copy-Item -LiteralPath windows/desktop-widget.cmd -Destination build/windows/x64/runner/Release/desktop-widget.cmd
+      - name: Test main interface and independent widget lifetime
+        timeout-minutes: 2
+        run: |
+          $hostTest = Start-Process -FilePath "$PWD/build/windows/x64/runner/Release/nas_todo.exe" -ArgumentList '--widget-host-self-test' -PassThru -WindowStyle Hidden
+          if (-not $hostTest.WaitForExit(60000)) { Stop-Process -Id $hostTest.Id; throw 'Desktop widget host test timed out' }
+          if ($hostTest.ExitCode -ne 0) { throw "Desktop widget host test failed: $($hostTest.ExitCode)" }
+          Write-Output 'Main close hides interface while widget stays visible; reopening and component close preserve main interface'
       - uses: actions/upload-artifact@v4
         with:
           name: nas-todo-windows-full-release

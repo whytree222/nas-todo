@@ -3,8 +3,8 @@
 #include <flutter/standard_method_codec.h>
 #include "flutter/generated_plugin_registrant.h"
 
-FlutterWindow::FlutterWindow(const flutter::DartProject& project, bool widget_only)
-    : project_(project), widget_only_(widget_only) {}
+FlutterWindow::FlutterWindow(const flutter::DartProject& project, bool widget_only, bool host_self_test)
+    : project_(project), widget_only_(widget_only), host_self_test_(host_self_test) {}
 FlutterWindow::~FlutterWindow() {}
 void FlutterWindow::ShowMain() {
   ShowWindow(GetHandle(), SW_RESTORE);
@@ -54,6 +54,7 @@ bool FlutterWindow::OnCreate() {
       });
   flutter_controller_->engine()->SetNextFrameCallback([this] {
     if (!widget_only_ || !widget_ || !widget_->IsOpen()) Show();
+    if (host_self_test_) PostMessage(GetHandle(), kHostTestStart, 0, 0);
   });
   flutter_controller_->ForceRedraw();
   return true;
@@ -66,6 +67,23 @@ void FlutterWindow::OnDestroy() {
 }
 LRESULT FlutterWindow::MessageHandler(HWND hwnd, UINT message, WPARAM wparam,
                                     LPARAM lparam) noexcept {
+  if (message == kHostTestStart && host_self_test_) {
+    if (!OpenWidget()) { PostQuitMessage(21); return 0; }
+    SendMessage(hwnd, WM_CLOSE, 0, 0);
+    HWND component = FindWindow(L"CN_PRIVATE_TODO_DESKTOP_WIDGET", nullptr);
+    if (!IsWindow(hwnd) || IsWindowVisible(hwnd) || !component || !IsWindowVisible(component)) {
+      PostQuitMessage(22); return 0;
+    }
+    ShowMain();
+    SendMessage(component, WM_CLOSE, 0, 0);
+    PostMessage(hwnd, kHostTestFinish, 0, 0);
+    return 0;
+  }
+  if (message == kHostTestFinish && host_self_test_) {
+    if (widget_ || !IsWindowVisible(hwnd)) { PostQuitMessage(23); return 0; }
+    SendMessage(hwnd, WM_CLOSE, 0, 0);
+    return 0;
+  }
   if (message == WM_CLOSE && widget_ && widget_->IsOpen()) {
     ShowWindow(hwnd, SW_HIDE);
     return 0;
