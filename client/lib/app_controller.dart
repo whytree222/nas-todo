@@ -171,6 +171,8 @@ class AppController extends ChangeNotifier {
 
   void _scheduleSync() {
     _editTimer?.cancel();
+    _editTimer = null;
+    if (_disposed || !isConfigured) return;
     _editTimer = Timer(const Duration(milliseconds: 700), () {
       if (isConfigured && !busy) unawaited(sync());
     });
