@@ -40,9 +40,9 @@ jobs:
           script: |
             for (let attempt = 0; attempt < 60; attempt++) {
               const {data: run} = await github.rest.actions.getWorkflowRun({
-                owner: context.repo.owner, repo: context.repo.repo, run_id: 38044484190
+                owner: context.repo.owner, repo: context.repo.repo, run_id: 38044970508
               });
-              if (run.head_sha !== 'ea531332801b7b07c3d8ccc3a60fb165dfdc1e42') {
+              if (run.head_sha !== '6b03e886fc992a9890a88c59e613a7fb1f251c1f') {
                 throw new Error('Source build commit mismatch');
               }
               if (run.status === 'completed') {
@@ -57,21 +57,21 @@ jobs:
         with:
           name: nas-todo-android-test-apk
           path: release-input/android
-          run-id: 38044484190
+          run-id: 38044970508
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Download tested Windows program
         uses: actions/download-artifact@v4
         with:
           name: nas-todo-windows-full-release
           path: release-input/windows
-          run-id: 38044484190
+          run-id: 38044970508
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Verify packages and publish private prerelease
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          NAS_TODO_BUILD_RUN: '38044484190'
-          NAS_TODO_BUILD_SHA: 'ea531332801b7b07c3d8ccc3a60fb165dfdc1e42'
+          NAS_TODO_BUILD_RUN: '38044970508'
+          NAS_TODO_BUILD_SHA: '6b03e886fc992a9890a88c59e613a7fb1f251c1f'
           NAS_TODO_RELEASE_VERSION: '0.4.0'
         run: python scripts/publish_release.py
       - name: Report release result
