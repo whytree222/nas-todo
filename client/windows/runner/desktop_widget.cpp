@@ -2,11 +2,14 @@
 #include <algorithm>
 #include <cstdio>
 #include <windowsx.h>
+#include <gdiplus.h>
+#include <dwmapi.h>
+#include "glass_surface.h"
 
 namespace {
 constexpr wchar_t kClass[] = L"CN_PRIVATE_TODO_DESKTOP_WIDGET";
 constexpr wchar_t kSettings[] = L"Software\\PrivateTodo\\DesktopWidget";
-constexpr COLORREF kClear = RGB(1, 2, 3);
+
 std::wstring Wide(const std::string& value) {
   if (value.empty()) return {};
   const int count = MultiByteToWideChar(CP_UTF8, 0, value.data(), static_cast<int>(value.size()), nullptr, 0);
@@ -59,18 +62,24 @@ bool DesktopWidget::Create(bool load_settings) {
   RegisterClass(&cls);
   const int x = load_settings ? static_cast<int>(Setting(L"X", 40)) : 40;
   const int y = load_settings ? static_cast<int>(Setting(L"Y", 40)) : 40;
-  const int width = load_settings ? static_cast<int>(Setting(L"Width", 350)) : 350;
-  const int height = load_settings ? static_cast<int>(Setting(L"Height", 440)) : 440;
+  const int saved_width = load_settings ? static_cast<int>(Setting(L"Width", 0)) : 0;
+  const int saved_height = load_settings ? static_cast<int>(Setting(L"Height", 0)) : 0;
+  const int width = saved_width > 0 ? saved_width : 340;
+  const int height = saved_height > 0 ? saved_height : 420;
   pinned_ = !load_settings || Setting(L"Pinned", 1) != 0;
   auto_hide_ = !load_settings || Setting(L"AutoHide", 1) != 0;
-  hwnd_ = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOOLWINDOW,
-      kClass, L"私有待办 · 桌面组件", WS_POPUP,
+  hwnd_ = CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOOLWINDOW,
+      kClass, L"私有待办 · 桌面组件", WS_POPUP | WS_THICKFRAME,
       x, y, std::clamp(width, 300, 800), std::clamp(height, 240, 1000),
       nullptr, nullptr, cls.hInstance, this);
   if (!hwnd_) return false;
-  if (!SetLayeredWindowAttributes(hwnd_, kClear, 255, LWA_COLORKEY)) return false;
+  current_dpi_ = GetDpiForWindow(hwnd_);
+  surface_ = std::make_unique<GlassSurface>();
+  if (!surface_->Create(hwnd_)) return false;
   // Stored sizes are physical pixels; keep controls usable after a DPI change.
-  SetWindowPos(hwnd_, nullptr, 0, 0, std::max(width, Dp(300)), std::max(height, Dp(240)),
+  SetWindowPos(hwnd_, nullptr, 0, 0,
+      saved_width > 0 ? std::max(width, Dp(300)) : Dp(340),
+      saved_height > 0 ? std::max(height, Dp(240)) : Dp(420),
       SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
   Snap();
   SetWindowPos(hwnd_, pinned_ ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0,
@@ -150,7 +159,7 @@ void DesktopWidget::Reveal() {
 }
 
 void DesktopWidget::Poll(POINT cursor, ULONGLONG now) {
-  if (!IsOpen() || dragging_) return;
+  if (!IsOpen() || dragging_ || menu_open_) return;
   RECT bounds{};
   GetWindowRect(hwnd_, &bounds);
   if (PtInRect(&bounds, cursor)) { Reveal(); outside_since_ = 0; }
@@ -203,7 +212,7 @@ void DesktopWidget::Update(const flutter::EncodableMap& state) {
 std::vector<DesktopWidget::Task> DesktopWidget::VisibleTasks() const {
   std::vector<Task> result;
   for (const auto& task : tasks_) {
-    if (task.date == (undated_ ? "" : today_)) result.push_back(task);
+    if (task.date.empty() || task.date == today_) result.push_back(task);
   }
   std::sort(result.begin(), result.end(), [](const Task& a, const Task& b) {
     if (a.completed != b.completed) return !a.completed;
@@ -213,81 +222,99 @@ std::vector<DesktopWidget::Task> DesktopWidget::VisibleTasks() const {
   return result;
 }
 
+WidgetPaintInput DesktopWidget::PaintState() const {
+  RECT rect{}; GetClientRect(hwnd_, &rect);
+  WidgetPaintInput state;
+  state.width = rect.right; state.height = rect.bottom;
+  state.dpi = GetDpiForWindow(hwnd_); state.collapsed = collapsed_;
+  state.edge = static_cast<WidgetEdge>(edge_);
+  state.native_glass = surface_ && surface_->NativeBackdrop();
+  state.editing = editing_; state.menu_hover = menu_hover_; state.has_error = !error_.empty();
+  state.today = Wide(today_); state.offset = offset_;
+  for (const auto& task : VisibleTasks()) state.tasks.push_back({task.title, task.completed, task.conflict, task.priority});
+  return state;
+}
+
 void DesktopWidget::Paint() {
-  PAINTSTRUCT paint{};
-  HDC dc = BeginPaint(hwnd_, &paint);
-  RECT bounds{};
-  GetClientRect(hwnd_, &bounds);
-  HDC buffer = CreateCompatibleDC(dc);
-  HBITMAP bitmap = CreateCompatibleBitmap(dc, bounds.right, bounds.bottom);
-  HGDIOBJ previous_bitmap = SelectObject(buffer, bitmap);
-  HBRUSH clear = CreateSolidBrush(kClear);
-  FillRect(buffer, &bounds, clear);
-  DeleteObject(clear);
-  SetBkMode(buffer, TRANSPARENT);
-  const auto text = [&](const std::wstring& value, RECT rect, int height, bool strike = false) {
-    HFONT font = CreateFont(-Dp(height), 0, 0, 0, FW_NORMAL, FALSE, strike ? TRUE : FALSE,
-        FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
-        DEFAULT_PITCH, L"Microsoft YaHei");
-    HGDIOBJ old = SelectObject(buffer, font);
-    RECT shadow = rect;
-    OffsetRect(&shadow, Dp(1), Dp(1));
-    SetTextColor(buffer, RGB(12, 20, 16));
-    DrawText(buffer, value.c_str(), -1, &shadow, DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX);
-    SetTextColor(buffer, strike ? RGB(180, 202, 190) : RGB(246, 255, 249));
-    DrawText(buffer, value.c_str(), -1, &rect, DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX);
-    SelectObject(buffer, old);
-    DeleteObject(font);
-  };
-  const auto button = [&](const wchar_t* label, RECT rect, bool active = false) {
-    HBRUSH brush = CreateSolidBrush(active ? RGB(46, 112, 83) : RGB(35, 49, 43));
-    FillRect(buffer, &rect, brush);
-    DeleteObject(brush);
-    RECT inset = rect; inset.left += Dp(4);
-    text(label, inset, 12);
-  };
-  hits_.clear();
-  if (collapsed_) {
-    button(edge_ == Edge::left ? L">" : edge_ == Edge::right ? L"<" : L"待办", bounds, true);
-  } else {
-    const int width = bounds.right;
-    const int height = bounds.bottom;
-    const RECT title{Dp(12), Dp(8), width - Dp(144), Dp(42)};
-    button(L"私有待办 · 拖动", title);
-    button(L"主界面", {width - Dp(138), Dp(8), width - Dp(72), Dp(42)});
-    button(pinned_ ? L"钉" : L"浮", {width - Dp(66), Dp(8), width - Dp(38), Dp(42)}, pinned_);
-    button(L"×", {width - Dp(32), Dp(8), width - Dp(6), Dp(42)});
-    button(L"今天", {Dp(12), Dp(50), Dp(60), Dp(78)}, !undated_);
-    button(L"未安排", {Dp(66), Dp(50), Dp(126), Dp(78)}, undated_);
-    button(auto_hide_ ? L"贴边隐藏 ✓" : L"贴边隐藏", {width - Dp(116), Dp(50), width - Dp(12), Dp(78)}, auto_hide_);
-    const auto tasks = VisibleTasks();
-    const size_t count = static_cast<size_t>(std::max(1, (height - Dp(130)) / Dp(48)));
-    if (!tasks.empty()) offset_ = std::min(offset_, tasks.size() - 1); else offset_ = 0;
-    for (size_t i = offset_; i < tasks.size() && i < offset_ + count; ++i) {
-      const int y = Dp(90) + static_cast<int>(i - offset_) * Dp(48);
-      const RECT check{Dp(12), y + Dp(6), Dp(38), y + Dp(34)};
-      button(tasks[i].conflict ? L"!" : tasks[i].completed ? L"✓" : L"□", check, tasks[i].completed);
-      text(tasks[i].title, {Dp(48), y, width - Dp(12), y + Dp(42)}, 14, tasks[i].completed);
-      hits_.push_back({check, tasks[i]});
+  PAINTSTRUCT paint{}; BeginPaint(hwnd_, &paint);
+  const auto input = PaintState();
+  if (input.width > 0 && input.height > 0 && surface_) {
+    BITMAPINFO info{}; info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth = input.width; info.bmiHeader.biHeight = -input.height;
+    info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32; info.bmiHeader.biCompression = BI_RGB;
+    HDC dc = CreateCompatibleDC(nullptr); void* pixels = nullptr;
+    HBITMAP bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &pixels, nullptr, 0);
+    if (bitmap && pixels) {
+      const auto old = SelectObject(dc, bitmap);
+      layout_ = PaintWidget(dc, input); offset_ = layout_.offset;
+      hits_.clear(); const auto tasks = VisibleTasks();
+      for (const auto& hit : layout_.tasks) hits_.push_back({hit.checkbox, tasks[hit.task_index]});
+      painted_ = layout_.painted && surface_->Present(input.width, input.height, pixels, static_cast<UINT>(input.width * 4));
+      SelectObject(dc, old); DeleteObject(bitmap);
     }
-    if (tasks.empty()) text(L"暂时没有待办", {Dp(16), Dp(94), width - Dp(16), Dp(142)}, 14);
-    std::wstring footer = error_.empty() ? status_ : error_;
-    if (tasks.size() > count) footer += L" · 滚轮查看更多";
-    text(footer, {Dp(12), height - Dp(36), width - Dp(64), height - Dp(6)}, 11);
-    button(L"同步", {width - Dp(58), height - Dp(36), width - Dp(8), height - Dp(6)});
-    HPEN pen = CreatePen(PS_SOLID, Dp(2), RGB(69, 118, 91));
-    HGDIOBJ old_pen = SelectObject(buffer, pen);
-    MoveToEx(buffer, width - Dp(16), height - Dp(3), nullptr);
-    LineTo(buffer, width - Dp(3), height - Dp(16));
-    SelectObject(buffer, old_pen); DeleteObject(pen);
+    DeleteDC(dc);
   }
-  BitBlt(dc, 0, 0, bounds.right, bounds.bottom, buffer, 0, 0, SRCCOPY);
-  SelectObject(buffer, previous_bitmap);
-  DeleteObject(bitmap); DeleteDC(buffer); EndPaint(hwnd_, &paint);
+  EndPaint(hwnd_, &paint);
+}
+
+void DesktopWidget::ShowMenu() {
+  menu_open_ = true; Reveal();
+  HMENU menu = CreatePopupMenu();
+  AppendMenu(menu, MF_STRING, 1, L"打开主界面");
+  AppendMenu(menu, MF_STRING, 2, L"立即同步");
+  AppendMenu(menu, MF_SEPARATOR, 0, nullptr);
+  AppendMenu(menu, MF_STRING | (pinned_ ? MF_CHECKED : 0), 3, L"保持置顶");
+  AppendMenu(menu, MF_STRING | (auto_hide_ ? MF_CHECKED : 0), 4, L"贴边自动收起");
+  AppendMenu(menu, MF_SEPARATOR, 0, nullptr);
+  AppendMenu(menu, MF_STRING, 5, L"关闭组件");
+  POINT position{layout_.menu.right, layout_.menu.bottom + Dp(6)};
+  ClientToScreen(hwnd_, &position); SetForegroundWindow(hwnd_);
+  const UINT command = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTALIGN,
+      position.x, position.y, 0, hwnd_, nullptr);
+  DestroyMenu(menu); menu_open_ = false; outside_since_ = 0;
+  if (command == 1) open_main_();
+  if (command == 2) sync_();
+  if (command == 3) { pinned_ = !pinned_; SetWindowPos(hwnd_, pinned_ ? HWND_TOPMOST : HWND_NOTOPMOST,
+      0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE); Save(); }
+  if (command == 4) { auto_hide_ = !auto_hide_; Save(); }
+  if (command == 5) PostMessage(hwnd_, WM_CLOSE, 0, 0);
+  InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+bool DesktopWidget::ExportImage(const wchar_t* path) {
+  if (!IsOpen()) return false;
+  UpdateWindow(hwnd_); DwmFlush();
+  RECT rect{}; GetWindowRect(hwnd_, &rect);
+  const int width = rect.right - rect.left, height = rect.bottom - rect.top;
+  BITMAPINFO info{}; info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  info.bmiHeader.biWidth = width; info.bmiHeader.biHeight = -height;
+  info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32; info.bmiHeader.biCompression = BI_RGB;
+  HDC desktop = GetDC(nullptr), dc = CreateCompatibleDC(desktop); void* pixels = nullptr;
+  HBITMAP bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &pixels, nullptr, 0);
+  if (!bitmap || !pixels) { if (bitmap) DeleteObject(bitmap); DeleteDC(dc); ReleaseDC(nullptr, desktop); return false; }
+  const auto old = SelectObject(dc, bitmap);
+  const bool captured = BitBlt(dc, 0, 0, width, height, desktop, rect.left, rect.top, SRCCOPY | CAPTUREBLT) != FALSE;
+  GdiFlush();
+  auto* bytes = static_cast<BYTE*>(pixels);
+  for (size_t i = 3; i < static_cast<size_t>(width) * height * 4; i += 4) bytes[i] = 255;
+  bool saved = false;
+  if (captured) {
+    Gdiplus::Bitmap image(width, height, width * 4, PixelFormat32bppARGB, bytes);
+    UINT count = 0, size = 0; Gdiplus::GetImageEncodersSize(&count, &size);
+    std::vector<BYTE> codecs(size);
+    if (size && Gdiplus::GetImageEncoders(count, size, reinterpret_cast<Gdiplus::ImageCodecInfo*>(codecs.data())) == Gdiplus::Ok) {
+      const auto* encoders = reinterpret_cast<const Gdiplus::ImageCodecInfo*>(codecs.data());
+      for (UINT i = 0; i < count; ++i) if (std::wcscmp(encoders[i].MimeType, L"image/png") == 0)
+        saved = image.Save(path, &encoders[i].Clsid, nullptr) == Gdiplus::Ok;
+    }
+  }
+  SelectObject(dc, old); DeleteObject(bitmap); DeleteDC(dc); ReleaseDC(nullptr, desktop);
+  return saved;
 }
 
 LRESULT DesktopWidget::Message(UINT message, WPARAM wp, LPARAM lp) {
   switch (message) {
+    case WM_NCCALCSIZE: return 0;
     case WM_PAINT: Paint(); return 0;
     case WM_ERASEBKGND: return 1;
     case WM_TIMER: { POINT point{}; GetCursorPos(&point); Poll(point, GetTickCount64()); return 0; }
@@ -297,9 +324,21 @@ LRESULT DesktopWidget::Message(UINT message, WPARAM wp, LPARAM lp) {
     case WM_DISPLAYCHANGE:
     case WM_SETTINGCHANGE: Reveal(); Snap(); return 0;
     case WM_DPICHANGED: {
-      Reveal(); const auto* rect = reinterpret_cast<RECT*>(lp);
-      SetWindowPos(hwnd_, nullptr, rect->left, rect->top, rect->right - rect->left,
-          rect->bottom - rect->top, SWP_NOZORDER | SWP_NOACTIVATE); Snap(); return 0;
+      const auto* rect = reinterpret_cast<RECT*>(lp);
+      const UINT new_dpi = HIWORD(wp);
+      if (collapsed_) {
+        const int width = MulDiv(expanded_.right - expanded_.left, static_cast<int>(new_dpi), static_cast<int>(current_dpi_));
+        const int height = MulDiv(expanded_.bottom - expanded_.top, static_cast<int>(new_dpi), static_cast<int>(current_dpi_));
+        int x = rect->left, y = rect->top;
+        if (edge_ == Edge::left || edge_ == Edge::right) y -= (height - (rect->bottom - rect->top)) / 2;
+        else x -= (width - (rect->right - rect->left)) / 2;
+        collapsed_ = false; transition_ = true;
+        SetWindowPos(hwnd_, nullptr, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+        transition_ = false;
+      } else SetWindowPos(hwnd_, nullptr, rect->left, rect->top, rect->right - rect->left,
+          rect->bottom - rect->top, SWP_NOZORDER | SWP_NOACTIVATE);
+      current_dpi_ = new_dpi ? new_dpi : 96;
+      Snap(); return 0;
     }
     case WM_GETMINMAXINFO: {
       if (!transition_) {
@@ -309,40 +348,40 @@ LRESULT DesktopWidget::Message(UINT message, WPARAM wp, LPARAM lp) {
       return 0;
     }
     case WM_NCHITTEST: {
-      if (collapsed_) return HTCLIENT;
       POINT point{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)}; ScreenToClient(hwnd_, &point);
       RECT rect{}; GetClientRect(hwnd_, &rect);
-      if (point.x >= rect.right - Dp(18) && point.y >= rect.bottom - Dp(18)) return HTBOTTOMRIGHT;
-      if (point.y >= Dp(8) && point.y < Dp(42) && point.x < rect.right - Dp(144)) return HTCAPTION;
+      const int radius = std::min(Dp(collapsed_ ? 10 : 16), static_cast<int>(std::min(rect.right, rect.bottom) / 2));
+      const int dx = point.x - std::clamp(static_cast<int>(point.x), radius, static_cast<int>(rect.right) - radius);
+      const int dy = point.y - std::clamp(static_cast<int>(point.y), radius, static_cast<int>(rect.bottom) - radius);
+      if (dx * dx + dy * dy > radius * radius) return HTTRANSPARENT;
+      if (collapsed_) return HTCLIENT;
+      if (PtInRect(&layout_.resize, point)) return HTBOTTOMRIGHT;
+      if (PtInRect(&layout_.menu, point)) return HTCLIENT;
+      if (PtInRect(&layout_.drag, point)) return HTCAPTION;
       return HTCLIENT;
     }
     case WM_MOUSEWHEEL: {
       if (GET_WHEEL_DELTA_WPARAM(wp) < 0) ++offset_; else if (offset_ > 0) --offset_;
       InvalidateRect(hwnd_, nullptr, TRUE); return 0;
     }
+    case WM_MOUSEMOVE: {
+      const POINT point{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+      const bool hovered = PtInRect(&layout_.menu, point) != FALSE;
+      if (hovered != menu_hover_) { menu_hover_ = hovered; InvalidateRect(hwnd_, nullptr, FALSE); }
+      TRACKMOUSEEVENT tracking{sizeof(TRACKMOUSEEVENT), TME_LEAVE, hwnd_, 0}; TrackMouseEvent(&tracking);
+      return 0;
+    }
+    case WM_MOUSELEAVE: menu_hover_ = false; InvalidateRect(hwnd_, nullptr, FALSE); return 0;
+    case WM_RBUTTONUP: if (!collapsed_) ShowMenu(); return 0;
     case WM_LBUTTONUP: {
       if (collapsed_) { Reveal(); return 0; }
-      const int x = GET_X_LPARAM(lp), y = GET_Y_LPARAM(lp);
-      RECT rect{}; GetClientRect(hwnd_, &rect);
-      if (y >= Dp(8) && y < Dp(42)) {
-        if (x >= rect.right - Dp(32)) PostMessage(hwnd_, WM_CLOSE, 0, 0);
-        else if (x >= rect.right - Dp(66)) {
-          pinned_ = !pinned_;
-          SetWindowPos(hwnd_, pinned_ ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0,
-              SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE); Save();
-        } else if (x >= rect.right - Dp(138)) open_main_();
-      } else if (y >= Dp(50) && y < Dp(78)) {
-        if (x >= rect.right - Dp(116)) { auto_hide_ = !auto_hide_; Reveal(); Save(); }
-        else if (x < Dp(126)) { undated_ = x >= Dp(66); offset_ = 0; }
-      } else if (y >= rect.bottom - Dp(36) && x >= rect.right - Dp(58)) sync_();
-      else if (!editing_) {
-        const POINT point{x, y};
-        for (const auto& hit : hits_) if (PtInRect(&hit.first, point)) {
-          if (hit.second.conflict) open_main_(); else toggle_(hit.second.id, !hit.second.completed);
-          break;
-        }
+      const POINT point{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+      if (PtInRect(&layout_.menu, point)) { ShowMenu(); return 0; }
+      if (!editing_) for (const auto& hit : hits_) if (PtInRect(&hit.first, point)) {
+        if (hit.second.conflict) open_main_(); else toggle_(hit.second.id, !hit.second.completed);
+        break;
       }
-      InvalidateRect(hwnd_, nullptr, TRUE); return 0;
+      InvalidateRect(hwnd_, nullptr, FALSE); return 0;
     }
     case WM_CLOSE: Save(); DestroyWindow(hwnd_); return 0;
     case WM_NCDESTROY: {
@@ -369,8 +408,7 @@ int DesktopWidget::SelfTest() {
   DesktopWidget widget([&](const std::string& id, bool done) { toggled = id == "one" && done; },
       [] {}, [] {}, [&] { closed = true; });
   if (!widget.Create(false)) return 1;
-  COLORREF key = 0; BYTE alpha = 0; DWORD flags = 0;
-  if (!GetLayeredWindowAttributes(widget.hwnd_, &key, &alpha, &flags) || key != kClear || !(flags & LWA_COLORKEY)) return 2;
+  if (!widget.surface_) return 2;
   if (GetWindow(widget.hwnd_, GW_OWNER) || (GetWindowLongPtr(widget.hwnd_, GWL_STYLE) & WS_CHILD)) return 3;
   using flutter::EncodableValue;
   flutter::EncodableMap task{{EncodableValue("id"), EncodableValue("one")},
@@ -380,8 +418,9 @@ int DesktopWidget::SelfTest() {
   widget.Update({{EncodableValue("today"), EncodableValue("2026-10-09")},
       {EncodableValue("tasks"), EncodableValue(flutter::EncodableList{EncodableValue(task)})}});
   UpdateWindow(widget.hwnd_);
-  if (widget.hits_.empty()) return 4;
-  SendMessage(widget.hwnd_, WM_LBUTTONUP, 0, MAKELPARAM(widget.Dp(22), widget.Dp(110)));
+  if (!widget.painted_ || widget.hits_.empty()) return 4;
+  const RECT checkbox = widget.hits_.front().first;
+  SendMessage(widget.hwnd_, WM_LBUTTONUP, 0, MAKELPARAM((checkbox.left + checkbox.right) / 2, (checkbox.top + checkbox.bottom) / 2));
   if (!toggled) return 5;
   const RECT work = widget.WorkArea();
   for (const Edge edge : {Edge::left, Edge::right, Edge::top, Edge::bottom}) {
@@ -404,6 +443,6 @@ int DesktopWidget::SelfTest() {
   DestroyWindow(main);
   SendMessage(widget.hwnd_, WM_CLOSE, 0, 0);
   if (!closed || widget.IsOpen()) return 10;
-  std::puts("Native widget checks passed: transparency, independent lifetime, checkbox, four-edge collapse, hover reveal");
+  std::puts("Native widget checks passed: glass surface, minimal layout, independent lifetime, checkbox, four-edge collapse, hover reveal");
   return 0;
 }

@@ -123,11 +123,11 @@ jobs:
         run: flutter test
       - name: Build Windows release
         run: flutter build windows --release
-      - name: Test native transparent desktop widget
+      - name: Test native glass desktop widget
         run: |
           $widgetTest = Start-Process -FilePath "$PWD/build/windows/x64/runner/Release/nas_todo.exe" -ArgumentList '--widget-self-test' -Wait -PassThru -WindowStyle Hidden
           if ($widgetTest.ExitCode -ne 0) { throw "Native widget checks failed: $($widgetTest.ExitCode)" }
-          Write-Output 'Native widget checks passed: transparency, independent window, completion, four edges and hover reveal'
+          Write-Output 'Native widget checks passed: composed glass, independent window, completion, four edges and hover reveal'
       - name: Include standalone widget launcher
         run: Copy-Item -LiteralPath windows/desktop-widget.cmd -Destination build/windows/x64/runner/Release/desktop-widget.cmd
       - name: Test main interface and independent widget lifetime

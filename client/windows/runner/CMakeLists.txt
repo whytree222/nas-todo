@@ -8,7 +8,6 @@ project(runner LANGUAGES CXX)
 # Any new source files that you add to the application should be added here.
 add_executable(${BINARY_NAME} WIN32
   "flutter_window.cpp"
-  "desktop_widget.cpp"
   "main.cpp"
   "utils.cpp"
   "win32_window.cpp"
@@ -36,6 +35,23 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 # dependencies here.
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
 target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib" "gdi32.lib" "advapi32.lib")
+
+add_library(widget_ui STATIC "desktop_widget.cpp" "widget_painter.cpp" "glass_surface.cpp")
+apply_standard_settings(widget_ui)
+target_compile_options(widget_ui PRIVATE /utf-8)
+target_compile_definitions(widget_ui PRIVATE NOMINMAX)
+target_include_directories(widget_ui PUBLIC "${FLUTTER_MANAGED_DIR}/ephemeral/cpp_client_wrapper/include")
+target_link_libraries(widget_ui PUBLIC gdiplus.lib d3d11.lib dxgi.lib dcomp.lib dwmapi.lib gdi32.lib advapi32.lib)
+add_dependencies(widget_ui flutter_assemble)
+target_link_libraries(${BINARY_NAME} PRIVATE widget_ui)
+
+# Synthetic visual checks are kept out of the shipped application directory.
+add_executable(widget_preview EXCLUDE_FROM_ALL "widget_preview_main.cpp")
+apply_standard_settings(widget_preview)
+target_compile_options(widget_preview PRIVATE /utf-8)
+target_compile_definitions(widget_preview PRIVATE NOMINMAX)
+target_link_libraries(widget_preview PRIVATE widget_ui ole32.lib)
+set_target_properties(widget_preview PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/widget-preview")
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.

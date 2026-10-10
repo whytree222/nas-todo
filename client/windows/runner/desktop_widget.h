@@ -6,6 +6,9 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include <memory>
+#include "widget_painter.h"
+class GlassSurface;
 
 class DesktopWidget {
  public:
@@ -18,6 +21,7 @@ class DesktopWidget {
   void Reveal();
   bool IsOpen() const { return hwnd_ && IsWindow(hwnd_); }
   static int SelfTest();
+  bool ExportImage(const wchar_t* path);
 
  private:
   struct Task {
@@ -37,12 +41,16 @@ class DesktopWidget {
   std::wstring status_ = L"正在读取待办";
   std::wstring error_;
   std::string today_;
-  bool editing_ = false, undated_ = false, pinned_ = true, auto_hide_ = true;
+  bool editing_ = false, pinned_ = true, auto_hide_ = true;
+  bool menu_hover_ = false, menu_open_ = false, painted_ = false;
   bool collapsed_ = false, dragging_ = false, transition_ = false, save_settings_ = true;
   Edge edge_ = Edge::none;
   RECT expanded_{};
   size_t offset_ = 0;
   ULONGLONG outside_since_ = 0;
+  UINT current_dpi_ = 96;
+  WidgetPaintLayout layout_;
+  std::unique_ptr<GlassSurface> surface_;
   int Dp(int value) const;
   RECT WorkArea() const;
   void Snap();
@@ -50,6 +58,8 @@ class DesktopWidget {
   void Poll(POINT cursor, ULONGLONG now);
   void Save();
   void Paint();
+  void ShowMenu();
+  WidgetPaintInput PaintState() const;
   std::vector<Task> VisibleTasks() const;
   LRESULT Message(UINT message, WPARAM wp, LPARAM lp);
   static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
