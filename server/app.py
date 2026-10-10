@@ -15,6 +15,7 @@ import re
 import socket
 import sqlite3
 import threading
+import time
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -333,10 +334,47 @@ class SyncHandler(BaseHTTPRequestHandler):
         self.close_connection = True
         if not head_only:
             self.wfile.write(body)
+        self.wfile.flush()
         logging.info("%s %s", self.command, status)
 
     def send_api_error(self, error: ApiError) -> None:
         self.send_json(error.status, {"error": error.code, "message": error.message})
+
+    def discard_rejected_body(self) -> None:
+        """Avoid a TCP reset discarding an early HTTP error during an upload.
+
+        Authentication still happens before parsing or applying the request. Only
+        discard a correctly framed, bounded body; do not wait for oversized,
+        ambiguous, chunked, or Expect: 100-continue uploads. Send the response
+        first, then allow up to two seconds total for an already-running upload.
+        """
+        if self.headers.get("Transfer-Encoding") is not None:
+            return
+        if self.headers.get("Expect", "").lower() == "100-continue":
+            return
+        lengths = self.headers.get_all("Content-Length", [])
+        if len(lengths) != 1 or not re.fullmatch(r"[0-9]{1,10}", lengths[0]):
+            return
+        remaining = int(lengths[0])
+        if remaining > MAX_BODY_BYTES:
+            return
+        original_timeout = self.connection.gettimeout()
+        deadline = time.monotonic() + 2
+        try:
+            while remaining:
+                timeout = deadline - time.monotonic()
+                if timeout <= 0:
+                    break
+                self.connection.settimeout(timeout)
+                chunk = self.rfile.read1(min(remaining, 64 * 1024))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+        except (OSError, ValueError):
+            # Rejected requests never reach the database, even if the peer stops.
+            pass
+        finally:
+            self.connection.settimeout(original_timeout)
 
     def authorize_and_length(self) -> int:
         if self.headers.get_all("Authorization") and len(self.headers.get_all("Authorization")) != 1:
@@ -385,6 +423,7 @@ class SyncHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         sync_slot = False
+        body_read_started = False
         try:
             if self.path != "/api/sync":
                 raise ApiError(404, "not_found", "Route not found")
@@ -394,6 +433,7 @@ class SyncHandler(BaseHTTPRequestHandler):
             sync_slot = self.server.sync_slots.acquire(timeout=5)  # type: ignore[attr-defined]
             if not sync_slot:
                 raise ApiError(503, "server_busy", "Server is busy; retry later")
+            body_read_started = True
             raw = self.rfile.read(length)
             if len(raw) != length:
                 raise ApiError(400, "invalid_json", "Incomplete request body")
@@ -405,6 +445,8 @@ class SyncHandler(BaseHTTPRequestHandler):
             self.send_json(200, self.server.service.sync(value))  # type: ignore[attr-defined]
         except ApiError as error:
             self.send_api_error(error)
+            if not body_read_started:
+                self.discard_rejected_body()
         except (socket.timeout, TimeoutError):
             self.send_api_error(ApiError(408, "request_timeout", "Request body timed out"))
         except sqlite3.OperationalError:

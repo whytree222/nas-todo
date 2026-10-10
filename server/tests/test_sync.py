@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import socket
 import sys
 import tempfile
 import threading
@@ -91,6 +92,28 @@ class SyncTest(unittest.TestCase):
         for token in ("", "short", "x" * 32 + " ", "汉" * 32):
             with self.assertRaises(ValueError):
                 SyncService(Config(self.db, token))
+
+    def test_unauthorized_upload_delivers_complete_error_without_reset(self):
+        # Deliberately start the body after the server has rejected the headers.
+        # Closing with its upload unread can otherwise reset the connection and
+        # turn a framed 401 response into a platform-dependent transport failure.
+        body = json.dumps({"instance_id": None, "cursor": 0, "operations": [],
+                           "padding": "x" * (768 * 1024)}).encode("utf-8")
+        headers = ("POST /api/sync HTTP/1.1\r\nHost: localhost\r\n"
+                   "Authorization: Bearer wrong-token\r\nContent-Type: application/json\r\n"
+                   f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n").encode("ascii")
+        with socket.create_connection(("127.0.0.1", self.port), timeout=5) as connection:
+            connection.sendall(headers + body[:1])
+            response = http.client.HTTPResponse(connection)
+            try:
+                response.begin()
+                self.assertEqual(response.status, 401)
+                connection.sendall(body[1:])
+                error = json.loads(response.read())
+                self.assertEqual(error["error"], "unauthorized")
+            finally:
+                response.close()
+        self.assertEqual(self.sync([])[1]["cursor"], 0)
 
     def test_create_update_and_incremental_pull(self):
         first = operation()
