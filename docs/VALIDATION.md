@@ -1,6 +1,25 @@
 # 验证记录
 
-## 当前 v0.3.0：独立透明 Windows 组件
+## 当前 v0.4.0：毛玻璃与极简 Windows 组件
+
+2026-10-10，[构建 38044970508](https://github.com/whytree222/nas-todo/actions/runs/38044970508) 全部成功，源提交 `6b03e886fc992a9890a88c59e613a7fb1f251c1f`。19 项后端测试、两端静态分析和各 33 项客户端测试、Android APK 与 Windows x64 原生编译通过。
+
+服务端新增认证失败时完整错误响应的回归检查：发送错误响应后限量丢弃尚未读完的上传正文，避免 Windows 连接重置使错误响应丢失。拒绝的正文不解析、不写数据库。Windows 原有“密钥错误保留所有本地修改”集成测试通过。
+
+Windows 原生检查覆盖玻璃表面合成、极简布局、无父窗口、直接勾选回调、四边收起后的标签留在工作区内和悬停展开；真实 Flutter 主界面关闭后隐藏且组件仍可见，重新打开主界面与关闭组件后主界面保留。离线队列与数据格式沿用原实现。
+
+本机 Windows 11 实际运行与发布程序共用 widget_ui 代码的隔离预览，使用演示待办及自身创建的红蓝条纹背景，确认文字、图标和 BGRA 像素上下方向正确。激活窗口中细条纹被模糊，大红蓝色块透过带底色的材质显示，确认本机支持的 Acrylic 真实渲染；非激活状态显示带底色备用卡片，符合系统材质策略。这些视觉检查没有读取真实待办或连接 NAS，未验证所有 Windows 版本、显卡、壁纸、多显示器和 DPI 组合。
+
+[发布 38045046146](https://github.com/whytree222/nas-todo/actions/runs/38045046146) 成功，[v0.4.0 私有 Release](https://github.com/whytree222/nas-todo/releases/tag/v0.4.0) 包含 APK、Windows 完整 ZIP（含 desktop-widget.cmd）、INSTALL.md 与 SHA256SUMS.txt。发布检查仓库私有、成功构建与源提交一致、APK 完整性、Windows x64 / DLL / 资源 / 独立启动器，并核对全部上传文件的大小与 SHA256。合成预览工具不包含在用户安装包中。
+
+实际 DX4600、ZeroTier 外网和安卓 / Windows 双端同步仍需设备验收。窗口和主界面共用后台进程及原离线队列；没有系统 Widgets 面板扩展、开机自启或应用内自动更新。Android 仍为测试签名。
+
+| v0.4.0 文件 | 字节数 | SHA256 |
+| --- | --- | --- |
+| nas-todo-windows-v0.4.0-x64.zip | 12,395,696 | `5a15ac81812da9e752528212dfb86bc814e8fa897236498b5368c9c5e50eea48` |
+| nas-todo-android-v0.4.0-test.apk | 160,634,957 | `101dc82d1e19a7aafc54425cc2d5f201af21f03a7d29154e0d1b82aee5f2c7b4` |
+
+## v0.3.0 历史版本：独立透明 Windows 组件
 
 2026-10-09，[构建 37933330471](https://github.com/whytree222/nas-todo/actions/runs/37933330471) 全部成功，源提交 `429a769ec07c9632f587371f94abfca89aaf0c3f`。18 项后端测试、两端静态分析和各 33 项客户端测试、Android APK 与 Windows x64 原生编译通过。
 
