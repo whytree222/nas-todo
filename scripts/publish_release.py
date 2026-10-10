@@ -82,7 +82,7 @@ def main():
     windows_output = dist / f'nas-todo-windows-{TAG}-x64.zip'
     with zipfile.ZipFile(windows_output, 'w', zipfile.ZIP_DEFLATED) as archive:
         for file in sorted(windows.rglob('*')):
-            if file.is_file():
+            if file.is_file() and file.suffix.lower() not in {'.lib', '.exp'}:
                 archive.write(file, file.relative_to(windows).as_posix())
     with zipfile.ZipFile(windows_output) as archive:
         check(archive.testzip() is None, 'Windows ZIP integrity failed')
