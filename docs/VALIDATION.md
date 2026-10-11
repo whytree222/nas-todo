@@ -1,6 +1,25 @@
 # 验证记录
 
-## 当前 v0.6.1：日历显示修复
+## 当前 v0.6.2：日历直接展开全部待办
+
+[构建 38135799194](https://github.com/whytree222/nas-todo/actions/runs/38135799194) 全部成功，源提交 `9b3688547ed8ffd1f76121cb03813274aea01bd1`。19 项后端测试、两端静态分析、各 69 项客户端测试、Android APK 和 Windows x64 原生编译通过；Windows 小组件与主窗口生命周期检查通过。
+
+取消日期格的预览数量限制，每周按任务最多的一天自动增高，直接展开当天全部待办。完成项保留原位置并划线；日期格中的“详情”可查看完整任务名称及编辑入口。七列适配窗口宽度；任务多时整张日历上下滚动，Windows 支持真实鼠标拖动与滚动条，安卓上下滑动。原有拖动安排和离线同步沿用，不需修改 NAS Compose。
+
+新增三项回归测试：安卓和 Windows 完整应用页面中，当天十二条待办全部存在且最后一条可滚动到、可完成并保留删除线，删除项不出现；放大字体时八条待办全部位于日期格内且不溢出。更新原有日历详情与月末可达性检查，沿用完整应用多尺寸、四至六周月份、拖动安排、取消与保存失败检查。测试使用隔离数据，未连接真实 NAS。
+
+[发布 38135894692](https://github.com/whytree222/nas-todo/actions/runs/38135894692) 成功，[v0.6.2 公开测试版](https://github.com/whytree222/nas-todo/releases/tag/v0.6.2) 提供 APK、完整 Windows ZIP、INSTALL.md 与 SHA256SUMS.txt。核对标签源提交、安装包完整性、字节数和 SHA256；源码和安装包按使用者授权公开，NAS 密钥、数据库和待办内容未上传。
+
+安卓仍为测试签名。实际手机滑动手感、Windows 多显示器与 DPI、真实 NAS 和 ZeroTier 双端同步仍需设备验收。
+
+| 文件 | 字节数 | SHA256 |
+|---|---:|---|
+| `INSTALL.md` | 1147 | `168db94418ca08990824d7071a0827f0d0dd986d666a15ceacde2d9e0c1b0824` |
+| `SHA256SUMS.txt` | 274 | `25a8a37a4dbbf4bf88228a97133485397767b383adfc9cf0a8485a6669b13961` |
+| `nas-todo-android-v0.6.2-test.apk` | 160664446 | `d1a7e0e69037021314bc8ef98e42dc75d4417e4288876cc5d39ee0b49ad433c6` |
+| `nas-todo-windows-v0.6.2-x64.zip` | 12481338 | `0671b96e0b05e53a9c6312b426e232ee64d4046b4e9c368331183f61a7743268` |
+
+## v0.6.1 历史版本：日历显示修复
 
 [构建 38122913525](https://github.com/whytree222/nas-todo/actions/runs/38122913525) 全部成功，源提交 `730ecdbf83bd1cb28edc4786b81e1fad5abe8176`。19 项后端测试、两端静态分析、各 66 项客户端测试、Android APK 和 Windows x64 原生编译通过；Windows 小组件与主窗口生命周期检查通过。
 
