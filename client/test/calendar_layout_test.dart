@@ -31,13 +31,11 @@ Future<AppController> _controller() async {
   return AppController.forTesting(engine);
 }
 
-void _size(WidgetTester tester, Size size, TargetPlatform platform) {
+void _size(WidgetTester tester, Size size) {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = size;
-  debugDefaultTargetPlatformOverride = platform;
   addTearDown(tester.view.resetDevicePixelRatio);
   addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(() => debugDefaultTargetPlatformOverride = null);
 }
 
 Future<void> _openAppCalendar(
@@ -96,8 +94,7 @@ void main() {
     testWidgets('Full app ${size.width}x${size.height} keeps all seven columns '
         'inside the calendar and its new-task button outside the tray',
         (tester) async {
-      _size(tester, size,
-          size.width < 600 ? TargetPlatform.android : TargetPlatform.windows);
+      _size(tester, size);
       final controller = await _controller();
       addTearDown(controller.dispose);
       final now = DateTime.now();
@@ -127,14 +124,16 @@ void main() {
             viewport);
       }
       expect(tester.takeException(), isNull);
-    });
+    }, variant: TargetPlatformVariant({
+      size.width < 600 ? TargetPlatform.android : TargetPlatform.windows,
+    }));
   }
 
   for (final month in [DateTime(2021, 2), DateTime(2025, 3)]) {
     testWidgets('Phone overview fits the entire ${month.year}-${month.month} '
         'month, including a six-week month, without horizontal panning',
         (tester) async {
-      _size(tester, const Size(390, 844), TargetPlatform.android);
+      _size(tester, const Size(390, 844));
       final controller = await _controller();
       addTearDown(controller.dispose);
       await _standaloneCalendar(tester, controller, month);
@@ -152,12 +151,12 @@ void main() {
         expect(_day(DateTime(2025, 4, 6)), findsOneWidget);
       }
       expect(tester.takeException(), isNull);
-    });
+    }, variant: const TargetPlatformVariant({TargetPlatform.android}));
   }
 
   testWidgets('A real Windows mouse can drag a short calendar to the last week',
       (tester) async {
-    _size(tester, const Size(900, 420), TargetPlatform.windows);
+    _size(tester, const Size(900, 420));
     final controller = await _controller();
     addTearDown(controller.dispose);
     await _standaloneCalendar(tester, controller, DateTime(2025, 3));
@@ -180,11 +179,11 @@ void main() {
     }
     _inside(tester.getRect(_day(DateTime(2025, 3, 31))), viewport);
     expect(tester.takeException(), isNull);
-  });
+  }, variant: const TargetPlatformVariant({TargetPlatform.windows}));
 
   testWidgets('Compact populated last-week cells show overflow without clipping '
       'and still reveal every task', (tester) async {
-    _size(tester, const Size(320, 568), TargetPlatform.android);
+    _size(tester, const Size(320, 568));
     final controller = await _controller();
     addTearDown(controller.dispose);
     for (var i = 0; i < 5; i++) {
@@ -210,11 +209,11 @@ void main() {
       expect(task, findsOneWidget);
     }
     expect(tester.takeException(), isNull);
-  });
+  }, variant: const TargetPlatformVariant({TargetPlatform.android}));
 
   testWidgets('Phone calendar header creates a task on the selected date '
       'without a floating overlay', (tester) async {
-    _size(tester, const Size(390, 844), TargetPlatform.android);
+    _size(tester, const Size(390, 844));
     final controller = await _controller();
     addTearDown(controller.dispose);
     await _openAppCalendar(tester, controller);
@@ -233,5 +232,5 @@ void main() {
     await tester.pumpAndSettle();
     expect(controller.tasks.single.dueDate, dateKey(selected));
     expect(tester.takeException(), isNull);
-  });
+  }, variant: const TargetPlatformVariant({TargetPlatform.android}));
 }
