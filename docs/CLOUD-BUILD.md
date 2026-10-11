@@ -1,6 +1,6 @@
 # 私有仓库云端编译
 
-运行 [38044970508](https://github.com/whytree222/nas-todo/actions/runs/38044970508) 的后端、安卓和 Windows 任务已全部成功，源提交 `6b03e886fc992a9890a88c59e613a7fb1f251c1f`。已将其安装包发布到 [v0.4.0 私有测试版 Release](https://github.com/whytree222/nas-todo/releases/tag/v0.4.0)，登录自己的 GitHub 账号下载 APK 与 Windows 完整程序 ZIP，详见 [安装说明](RELEASE-v0.4.0.md)。Release 安装包不受 Actions 产物 14 天保留期影响。
+运行 [38109357722](https://github.com/whytree222/nas-todo/actions/runs/38109357722) 的后端、安卓和 Windows 任务已全部成功，源提交 `a4eb69a8263cf9da2481dfd7b7f38f16b8aeae11`。已将其安装包发布到 [v0.5.0 私有测试版 Release](https://github.com/whytree222/nas-todo/releases/tag/v0.5.0)，登录自己的 GitHub 账号下载 APK 与 Windows 完整程序 ZIP，详见 [安装说明](RELEASE-v0.5.0.md)。Release 安装包不受 Actions 产物 14 天保留期影响。
 
 源码通过自己的 GitHub 私有仓库交给 Actions 编译。部署密钥和 NAS 数据不需要提供给 GitHub，客户端安装后再填写。
 
@@ -22,7 +22,7 @@
 - nas-todo-android-test-apk：解压得到 app-debug.apk，安装到安卓。
 - nas-todo-windows-full-release：解压整个文件夹，运行其中的 nas_todo.exe，保留旁边的 DLL 和 data 文件夹。
 
-Actions 产物保留 14 天，请下载保存或另行发布版本。publish.yml、publish-v02.yml、publish-v03.yml 与 publish-v04.yml 分别固定已验证的 v0.1.0、v0.2.0、v0.3.0、v0.4.0，不会把后续任意构建自动发布。当前 APK 使用测试签名；长期使用需固定自己的签名密钥，避免后续更新因签名变化而需要卸载应用。
+Actions 产物保留 14 天，请下载保存或另行发布版本。publish.yml、publish-v02.yml、publish-v03.yml、publish-v04.yml 与 publish-v05.yml 分别固定已验证的 v0.1.0、v0.2.0、v0.3.0、v0.4.0、v0.5.0，不会把后续任意构建自动发布。当前 APK 使用测试签名；长期使用需固定自己的签名密钥，避免后续更新因签名变化而需要卸载应用。
 
 ## 首次同步验收
 
@@ -34,4 +34,4 @@ Actions 产物保留 14 天，请下载保存或另行发布版本。publish.yml
 
 官方操作说明：https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow
 
-Windows 可双击完整目录中的 desktop-widget.cmd 单独启动毛玻璃组件；表面显示待办和“…”菜单，其他操作从菜单打开。主界面关闭后组件继续工作，保留原离线队列、应用身份及数据目录。
+Windows 可双击完整目录中的 desktop-widget.cmd 单独启动毛玻璃组件；表面显示待办和“…”菜单，其他操作从菜单打开。“设置 → 外观与主题”可选应用颜色，以及跟随应用或独立的小组件颜色。主界面关闭后组件继续工作，保留原离线队列、应用身份及数据目录。

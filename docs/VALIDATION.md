@@ -1,6 +1,34 @@
 # 验证记录
 
-## 当前 v0.4.0：毛玻璃与极简 Windows 组件
+<!-- v0.5.0-proof:start -->
+## 当前 v0.5.0：应用与小组件主题颜色
+
+[构建 38109357722](https://github.com/whytree222/nas-todo/actions/runs/38109357722) 全部成功，源提交 `a4eb69a8263cf9da2481dfd7b7f38f16b8aeae11`。19 项后端测试、两端静态分析和各 44 项客户端测试、Android APK 与 Windows x64 原生编译通过。
+
+应用新增黑、白、绿、蓝四种主题，小组件可跟随应用或独立选择同样四种颜色。选择保存在当前设备，手机与电脑可使用不同设置；NAS 任务数据、连接密钥、原离线队列和数据格式沿用原实现。
+
+[发布 38109492505](https://github.com/whytree222/nas-todo/actions/runs/38109492505) 成功，[v0.5.0 私有 Release](https://github.com/whytree222/nas-todo/releases/tag/v0.5.0) 包含 APK、Windows 完整 ZIP（含 desktop-widget.cmd）、INSTALL.md 与 SHA256SUMS.txt。发布前核对成功构建与源提交，安装包仍为私有测试版。
+
+本记录确认云端分析、测试、编译与发布。安卓四种小组件颜色的真实桌面显示，以及多显示器、DPI、DX4600、ZeroTier 外网和双端同步仍需设备验收。本机离屏配色检查见下方补充记录。
+
+Android 仍为测试签名，不能保证覆盖旧版；更新前保留未同步内容。窗口共用原后台进程及离线队列，没有系统 Widgets 面板扩展、开机自启或应用内自动更新。
+<!-- v0.5.0-proof:end -->
+
+### v0.5.0 安装包校验
+
+发布程序已核对上传后的字节数和 SHA256；对应已通过的源提交 `a4eb69a8263cf9da2481dfd7b7f38f16b8aeae11`。
+
+| 文件 | 字节数 | SHA256 |
+|---|---:|---|
+| `INSTALL.md` | 1329 | `d5010e72700f8e531ba8e3117c7ae8f76c8e70754ca588336302039abb3842ec` |
+| `nas-todo-android-v0.5.0-test.apk` | 160653598 | `9c6a06e06b2a6151011d084b134328bda82f21b117c1717288dd90fcdd9138e2` |
+| `nas-todo-windows-v0.5.0-x64.zip` | 12430452 | `6a6f6dc2d7fe7507ece9f82d6ddb38696a5f45bfdfcedcbebcc572cc3523d279` |
+| `SHA256SUMS.txt` | 274 | `877b55370c98f85b93187f940262a30778b16dabdbced2178f52d6730d5379e6` |
+
+本机补充验证：同一小组件绘制器的黑、白、绿、蓝离屏配色、预乘透明度像素、启动前主题保留、运行切色重绘及 DWM 明暗属性通过。配色图已目视检查；这些检查与离屏图不等同于四种配色的真实桌面 Acrylic 截图或安卓实机验收。
+
+
+## v0.4.0 历史版本：毛玻璃与极简 Windows 组件
 
 2026-10-10，[构建 38044970508](https://github.com/whytree222/nas-todo/actions/runs/38044970508) 全部成功，源提交 `6b03e886fc992a9890a88c59e613a7fb1f251c1f`。19 项后端测试、两端静态分析和各 33 项客户端测试、Android APK 与 Windows x64 原生编译通过。
 
