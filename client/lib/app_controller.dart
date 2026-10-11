@@ -6,25 +6,31 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'appearance.dart';
 import 'storage_io.dart';
 import 'sync_core.dart';
 
 /// Keeps local edits available even when the NAS cannot be reached.
 class AppController extends ChangeNotifier {
-  AppController._(this.engine, this._transport, this._configFile, this._vault);
+  AppController._(this.engine, this._transport, this._configFile, this._vault, this._appearanceStore);
 
   @visibleForTesting
-  factory AppController.forTesting(SyncEngine engine) => AppController._(
+  factory AppController.forTesting(SyncEngine engine, {AppearanceStore? appearanceStore}) => AppController._(
         engine,
         HttpSyncTransport('', ''),
         File('unused-test-config.json'),
         const FlutterSecureStorage(),
+        appearanceStore ?? MemoryAppearanceStore(),
       );
 
   final SyncEngine engine;
   final HttpSyncTransport _transport;
   final File _configFile;
   final FlutterSecureStorage _vault;
+  final AppearanceStore _appearanceStore;
+  AppearancePreferences _appearance = const AppearancePreferences();
+  bool _savingAppearance = false;
+  String? _appearanceError;
   Timer? _periodicTimer;
   Timer? _editTimer;
   bool _disposed = false;
@@ -46,6 +52,7 @@ class AppController extends ChangeNotifier {
       transport,
       File('${directory.path}/config.json'),
       const FlutterSecureStorage(),
+      FileAppearanceStore(File('${directory.path}/appearance.json')),
     );
     try {
       await controller._initialize();
@@ -67,10 +74,16 @@ class AppController extends ChangeNotifier {
   String get token => _token;
   String? get error => _error;
   bool get isConfigured => _serverUrl.isNotEmpty && _token.isNotEmpty;
+  TodoThemeColor get appTheme => _appearance.appTheme;
+  TodoThemeColor? get widgetTheme => _appearance.widgetTheme;
+  TodoThemeColor get effectiveWidgetTheme => _appearance.effectiveWidgetTheme;
+  bool get savingAppearance => _savingAppearance;
+  String? get appearanceError => _appearanceError;
 
   Future<void> _initialize() async {
     // Stop startup on corrupt storage, preserving the original data files.
     await engine.load();
+    await _loadAppearance();
     try {
       if (await _configFile.exists()) {
         final config = jsonDecode(await _configFile.readAsString())
@@ -90,6 +103,43 @@ class AppController extends ChangeNotifier {
       }
     });
     if (isConfigured) unawaited(sync());
+  }
+
+  Future<void> _loadAppearance() async {
+    try {
+      _appearance = AppearancePreferences.fromJson(await _appearanceStore.read());
+      _appearanceError = null;
+    } catch (error) {
+      _appearanceError = '主题设置读取失败，已使用默认颜色：${_messageFor(error)}';
+    }
+  }
+
+  @visibleForTesting
+  Future<void> loadAppearanceForTesting() async {
+    await _loadAppearance();
+    _notify();
+  }
+
+  Future<bool> setAppearance(TodoThemeColor appTheme, TodoThemeColor? widgetTheme) async {
+    if (_disposed || _savingAppearance) return false;
+    if (_appearance.appTheme == appTheme &&
+        _appearance.widgetTheme == widgetTheme &&
+        _appearanceError == null) return true;
+    _savingAppearance = true;
+    _notify();
+    try {
+      final next = AppearancePreferences(appTheme: appTheme, widgetTheme: widgetTheme);
+      await _appearanceStore.write(next.toJson());
+      _appearance = next;
+      _appearanceError = null;
+      return true;
+    } catch (error) {
+      _appearanceError = '主题颜色未能保存：${_messageFor(error)}';
+      return false;
+    } finally {
+      _savingAppearance = false;
+      _notify();
+    }
   }
 
   Future<bool> setConnection(String url, String token) async {
@@ -216,9 +266,13 @@ class AppController extends ChangeNotifier {
   }
 
   void _setError(Object error) {
+    _error = _messageFor(error);
+  }
+
+  String _messageFor(Object error) {
     var message = error.toString();
     if (_token.isNotEmpty) message = message.replaceAll(_token, '••••••');
-    _error = message.replaceFirst(RegExp(r'^\w*Exception:\s*'), '');
+    return message.replaceFirst(RegExp(r'^\w*Exception:\s*'), '');
   }
 
   void _notify() {

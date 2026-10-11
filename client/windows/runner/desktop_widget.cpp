@@ -39,6 +39,52 @@ DWORD Setting(const wchar_t* name, DWORD fallback) {
 void Put(HKEY key, const wchar_t* name, DWORD value) {
   RegSetValueEx(key, name, 0, REG_DWORD, reinterpret_cast<const BYTE*>(&value), sizeof(value));
 }
+
+bool VerifyPalettePixels() {
+  if (ParseWidgetTheme("black") != WidgetTheme::black ||
+      ParseWidgetTheme("white") != WidgetTheme::white ||
+      ParseWidgetTheme("blue") != WidgetTheme::blue ||
+      ParseWidgetTheme("green") != WidgetTheme::green ||
+      ParseWidgetTheme("unknown") != WidgetTheme::green ||
+      ParseWidgetTheme("") != WidgetTheme::green) return false;
+  WidgetPaintInput input;
+  input.width = 340; input.height = 320; input.native_glass = false;
+  input.today = L"2026-10-10";
+  input.tasks = {{L"未完成", false, false, 0}, {L"已完成", true, false, 0}};
+  BITMAPINFO info{}; info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  info.bmiHeader.biWidth = input.width; info.bmiHeader.biHeight = -input.height;
+  info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32;
+  HDC dc = CreateCompatibleDC(nullptr); void* bits = nullptr;
+  HBITMAP bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
+  if (!bitmap || !bits) { if (bitmap) DeleteObject(bitmap); DeleteDC(dc); return false; }
+  const auto previous = SelectObject(dc, bitmap);
+  bool valid = true; RECT first_check{};
+  for (const auto theme : {WidgetTheme::green, WidgetTheme::black,
+                           WidgetTheme::white, WidgetTheme::blue}) {
+    input.theme = theme;
+    const auto layout = PaintWidget(dc, input);
+    if (!layout.painted || layout.tasks.size() != 2) { valid = false; break; }
+    if (theme == WidgetTheme::green) first_check = layout.tasks.front().checkbox;
+    else if (!EqualRect(&first_check, &layout.tasks.front().checkbox)) { valid = false; break; }
+    const auto* bytes = static_cast<const BYTE*>(bits);
+    if (bytes[3] != 0) { valid = false; break; }
+    for (int i = 0; i < input.width * input.height; ++i) {
+      const BYTE* pixel = bytes + static_cast<size_t>(i) * 4;
+      if (pixel[0] > pixel[3] || pixel[1] > pixel[3] || pixel[2] > pixel[3]) {
+        valid = false; break;
+      }
+    }
+    // This unobstructed body pixel must distinguish light and tinted themes.
+    const BYTE* body = bytes + (static_cast<size_t>(96) * input.width + 170) * 4;
+    if (theme == WidgetTheme::white && !(body[0] > 210 && body[1] > 210 && body[2] > 210)) valid = false;
+    if (theme == WidgetTheme::black && !(body[0] < 50 && body[1] < 50 && body[2] < 50)) valid = false;
+    if (theme == WidgetTheme::green && !(body[1] > body[0] && body[1] > body[2])) valid = false;
+    if (theme == WidgetTheme::blue && !(body[0] > body[1] && body[1] > body[2])) valid = false;
+    if (!valid) break;
+  }
+  SelectObject(dc, previous); DeleteObject(bitmap); DeleteDC(dc);
+  return valid;
+}
 }
 
 DesktopWidget::DesktopWidget(Toggle toggle, std::function<void()> open_main,
@@ -76,6 +122,7 @@ bool DesktopWidget::Create(bool load_settings) {
   current_dpi_ = GetDpiForWindow(hwnd_);
   surface_ = std::make_unique<GlassSurface>();
   if (!surface_->Create(hwnd_)) return false;
+  ApplyTheme();
   // Stored sizes are physical pixels; keep controls usable after a DPI change.
   SetWindowPos(hwnd_, nullptr, 0, 0,
       saved_width > 0 ? std::max(width, Dp(300)) : Dp(340),
@@ -183,7 +230,17 @@ void DesktopWidget::Save() {
   RegCloseKey(key);
 }
 
+void DesktopWidget::ApplyTheme() {
+  if (!IsOpen()) return;
+  const BOOL dark = theme_ == WidgetTheme::white ? FALSE : TRUE;
+  DwmSetWindowAttribute(hwnd_, static_cast<DWMWINDOWATTRIBUTE>(20),
+                        &dark, sizeof(dark));
+}
+
 void DesktopWidget::Update(const flutter::EncodableMap& state) {
+  const WidgetTheme previous_theme = theme_;
+  theme_ = ParseWidgetTheme(String(state, "theme"));
+  if (theme_ != previous_theme) ApplyTheme();
   today_ = String(state, "today");
   status_ = Wide(String(state, "status"));
   error_ = Wide(String(state, "error"));
@@ -228,6 +285,7 @@ WidgetPaintInput DesktopWidget::PaintState() const {
   state.width = rect.right; state.height = rect.bottom;
   state.dpi = GetDpiForWindow(hwnd_); state.collapsed = collapsed_;
   state.edge = static_cast<WidgetEdge>(edge_);
+  state.theme = theme_;
   state.native_glass = surface_ && surface_->NativeBackdrop();
   state.editing = editing_; state.menu_hover = menu_hover_; state.has_error = !error_.empty();
   state.today = Wide(today_); state.offset = offset_;
@@ -404,24 +462,42 @@ LRESULT CALLBACK DesktopWidget::WndProc(HWND hwnd, UINT message, WPARAM wp, LPAR
 }
 
 int DesktopWidget::SelfTest() {
+  if (!VerifyPalettePixels()) return 11;
   bool closed = false, toggled = false;
   DesktopWidget widget([&](const std::string& id, bool done) { toggled = id == "one" && done; },
       [] {}, [] {}, [&] { closed = true; });
-  if (!widget.Create(false)) return 1;
-  if (!widget.surface_) return 2;
-  if (GetWindow(widget.hwnd_, GW_OWNER) || (GetWindowLongPtr(widget.hwnd_, GWL_STYLE) & WS_CHILD)) return 3;
   using flutter::EncodableValue;
   flutter::EncodableMap task{{EncodableValue("id"), EncodableValue("one")},
       {EncodableValue("title"), EncodableValue("桌面测试任务")},
       {EncodableValue("due_date"), EncodableValue("2026-10-09")},
       {EncodableValue("completed"), EncodableValue(false)}};
-  widget.Update({{EncodableValue("today"), EncodableValue("2026-10-09")},
-      {EncodableValue("tasks"), EncodableValue(flutter::EncodableList{EncodableValue(task)})}});
+  flutter::EncodableMap state{{EncodableValue("today"), EncodableValue("2026-10-09")},
+      {EncodableValue("theme"), EncodableValue("white")},
+      {EncodableValue("tasks"), EncodableValue(flutter::EncodableList{EncodableValue(task)})}};
+  // The initial snapshot arrives before the native surface is created. Its
+  // light material must survive GlassSurface's dark initialization default.
+  widget.Update(state);
+  if (!widget.Create(false)) return 1;
+  if (!widget.surface_) return 2;
+  if (GetWindow(widget.hwnd_, GW_OWNER) || (GetWindowLongPtr(widget.hwnd_, GWL_STYLE) & WS_CHILD)) return 3;
+  if (widget.PaintState().theme != WidgetTheme::white) return 13;
+  BOOL dark = TRUE;
+  if (SUCCEEDED(DwmGetWindowAttribute(widget.hwnd_, static_cast<DWMWINDOWATTRIBUTE>(20),
+      &dark, sizeof(dark))) && dark) return 13;
   UpdateWindow(widget.hwnd_);
   if (!widget.painted_ || widget.hits_.empty()) return 4;
   const RECT checkbox = widget.hits_.front().first;
   SendMessage(widget.hwnd_, WM_LBUTTONUP, 0, MAKELPARAM((checkbox.left + checkbox.right) / 2, (checkbox.top + checkbox.bottom) / 2));
   if (!toggled) return 5;
+  for (const auto* name : {"black", "white", "green", "blue", "unknown"}) {
+    state[EncodableValue("theme")] = EncodableValue(name);
+    widget.painted_ = false;
+    widget.Update(state); UpdateWindow(widget.hwnd_);
+    if (widget.PaintState().theme != ParseWidgetTheme(name) || !widget.painted_) return 12;
+    const BOOL expected_dark = ParseWidgetTheme(name) == WidgetTheme::white ? FALSE : TRUE;
+    if (SUCCEEDED(DwmGetWindowAttribute(widget.hwnd_, static_cast<DWMWINDOWATTRIBUTE>(20),
+        &dark, sizeof(dark))) && dark != expected_dark) return 14;
+  }
   const RECT work = widget.WorkArea();
   for (const Edge edge : {Edge::left, Edge::right, Edge::top, Edge::bottom}) {
     widget.edge_ = edge;
@@ -443,6 +519,6 @@ int DesktopWidget::SelfTest() {
   DestroyWindow(main);
   SendMessage(widget.hwnd_, WM_CLOSE, 0, 0);
   if (!closed || widget.IsOpen()) return 10;
-  std::puts("Native widget checks passed: glass surface, minimal layout, independent lifetime, checkbox, four-edge collapse, hover reveal");
+  std::puts("Native widget checks passed: four themes, premultiplied palette pixels, stable layout, glass surface, independent lifetime, checkbox, four-edge collapse, hover reveal");
   return 0;
 }

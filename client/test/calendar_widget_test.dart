@@ -94,6 +94,31 @@ void main() {
     expect(snapshot, isNot(contains('token')));
   });
 
+  test('Widget theme changes update the snapshot while preserving its private-field exclusions', () {
+    const tasks = [
+      Task(id: 'theme-task', title: '主题预览', note: '不应发布的私人备注'),
+      Task(id: 'deleted-task', title: '已删除内容', deleted: true),
+    ];
+    final original = jsonDecode(widgetSnapshot(tasks, [])) as Map;
+    expect(original['theme'], 'green');
+    final snapshots = <String>{};
+    for (final theme in ['black', 'white', 'green', 'blue']) {
+      final snapshot = widgetSnapshot(tasks, [], theme: theme);
+      snapshots.add(snapshot);
+      final state = jsonDecode(snapshot) as Map;
+      expect(state['theme'], theme);
+      expect(state['tasks'], original['tasks']);
+      expect(state.keys, unorderedEquals(['theme', 'tasks']));
+      expect(snapshot, isNot(contains('不应发布的私人备注')));
+      expect(snapshot, isNot(contains('已删除内容')));
+      expect(snapshot, isNot(contains('server_url')));
+      expect(snapshot, isNot(contains('token')));
+    }
+    expect(snapshots.length, 4);
+    final invalid = jsonDecode(widgetSnapshot(tasks, [], theme: 'unknown')) as Map;
+    expect(invalid, original);
+  });
+
   testWidgets('Calendar retains struck-through completed tasks and clamps leap month navigation', (tester) async {
     _size(tester, const Size(900, 650));
     final controller = await _controller();

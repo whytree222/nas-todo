@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.Paint
 import android.net.Uri
 import android.os.Bundle
@@ -34,6 +35,30 @@ class TodoWidgetProvider : AppWidgetProvider() {
         const val PREFS = "todo_widget"
         const val COMPLETE = "cn.privatetodo.app.WIDGET_COMPLETE"
 
+        private data class Palette(val background: Int, val text: Int,
+            val muted: Int, val accent: Int, val completed: Int, val conflict: Int)
+
+        // The persisted snapshot is the only theme source for the widget host.
+        // Unknown or older snapshot values keep the original green appearance.
+        private fun palette(theme: String): Palette = when (theme) {
+            "black" -> Palette(R.drawable.widget_background_black,
+                Color.parseColor("#F2F4F6"), Color.parseColor("#B1BCC7"),
+                Color.parseColor("#DDE5ED"), Color.parseColor("#89949F"),
+                Color.parseColor("#FFBE86"))
+            "white" -> Palette(R.drawable.widget_background_white,
+                Color.parseColor("#26303B"), Color.parseColor("#626F7D"),
+                Color.parseColor("#495B6C"), Color.parseColor("#798490"),
+                Color.parseColor("#A3471B"))
+            "blue" -> Palette(R.drawable.widget_background_blue,
+                Color.parseColor("#203E60"), Color.parseColor("#52718E"),
+                Color.parseColor("#2568A6"), Color.parseColor("#6A8198"),
+                Color.parseColor("#A3471B"))
+            else -> Palette(R.drawable.widget_background,
+                Color.parseColor("#244C3E"), Color.parseColor("#547565"),
+                Color.parseColor("#326B58"), Color.parseColor("#71857A"),
+                Color.parseColor("#A3471B"))
+        }
+
         fun updateAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
             manager.getAppWidgetIds(ComponentName(context, TodoWidgetProvider::class.java))
@@ -60,13 +85,20 @@ class TodoWidgetProvider : AppWidgetProvider() {
         private fun update(context: Context, manager: AppWidgetManager, id: Int) {
             val today = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
             val snapshot = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("snapshot", null)
-            val array = try { JSONObject(snapshot ?: "{\"tasks\":[]}").optJSONArray("tasks") }
-                catch (_: Exception) { null }
+            val state = try { JSONObject(snapshot ?: "{\"tasks\":[]}") }
+                catch (_: Exception) { JSONObject() }
+            val colors = palette(state.optString("theme", "green"))
+            val array = state.optJSONArray("tasks")
             val tasks = (0 until (array?.length() ?: 0)).mapNotNull { array?.optJSONObject(it) }
                 .filter { it.optString("due_date") == today }
                 .sortedWith(compareBy<JSONObject> { it.optBoolean("completed") }
                     .thenByDescending { it.optInt("priority") }.thenBy { it.optString("title") })
             val views = RemoteViews(context.packageName, R.layout.todo_widget)
+            views.setInt(R.id.widget_root, "setBackgroundResource", colors.background)
+            views.setTextColor(R.id.widget_title, colors.text)
+            views.setTextColor(R.id.widget_summary, colors.muted)
+            views.setTextColor(R.id.widget_empty, colors.muted)
+            views.setTextColor(R.id.widget_open, colors.accent)
             views.setTextViewText(R.id.widget_title, "今天 · ${today.substring(5).replace('-', '月')}日")
             val remaining = tasks.count { !it.optBoolean("completed") }
             views.setTextViewText(R.id.widget_summary, "$remaining 项未完成 / ${tasks.size} 项 · 点勾选打开应用保存")
@@ -82,6 +114,9 @@ class TodoWidgetProvider : AppWidgetProvider() {
                 val taskId = task.getString("id")
                 row.setTextViewText(R.id.widget_check, if (conflict) "!" else if (done) "☑" else "☐")
                 row.setTextViewText(R.id.widget_task_title, task.getString("title"))
+                row.setTextColor(R.id.widget_check, if (conflict) colors.conflict
+                    else if (done) colors.completed else colors.accent)
+                row.setTextColor(R.id.widget_task_title, if (done) colors.completed else colors.text)
                 row.setInt(R.id.widget_task_title, "setPaintFlags", Paint.ANTI_ALIAS_FLAG or
                     if (done) Paint.STRIKE_THRU_TEXT_FLAG else 0)
                 row.setOnClickPendingIntent(R.id.widget_task_title, launch(context, "privatetodo://widget/open/$taskId"))

@@ -9,6 +9,10 @@
 // Coordinates and dimensions are physical pixels. Text and spacing scale with
 // dpi. Task indices refer to the input vector, including when it is scrolled.
 enum class WidgetEdge { none, left, right, top, bottom };
+enum class WidgetTheme { black, white, green, blue };
+
+// Themes are sent by the app. Unknown names retain the original green design.
+WidgetTheme ParseWidgetTheme(const std::string& name);
 
 struct WidgetPaintTask {
   std::wstring title;
@@ -23,6 +27,7 @@ struct WidgetPaintInput {
   UINT dpi = 96;
   bool collapsed = false;
   WidgetEdge edge = WidgetEdge::none;
+  WidgetTheme theme = WidgetTheme::green;
   bool native_glass = true;
   bool editing = false;
   bool menu_hover = false;

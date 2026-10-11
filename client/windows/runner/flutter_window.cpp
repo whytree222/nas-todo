@@ -47,6 +47,11 @@ bool FlutterWindow::OnCreate() {
           const auto* state = call.arguments() ? std::get_if<flutter::EncodableMap>(call.arguments()) : nullptr;
           if (!state) { result->Error("invalid_argument", "Expected task state"); return; }
           snapshot_ = *state;
+          const auto theme = state->find(flutter::EncodableValue("app_theme"));
+          if (theme != state->end()) {
+            const auto* name = std::get_if<std::string>(&theme->second);
+            if (name) SetDarkFrame(*name == "black");
+          }
           if (widget_ && widget_->IsOpen()) widget_->Update(snapshot_);
           else if (widget_only_ && !OpenWidget()) { widget_only_ = false; ShowMain(); }
           result->Success();

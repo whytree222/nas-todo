@@ -263,6 +263,12 @@ void Win32Window::SetQuitOnClose(bool quit_on_close) {
   quit_on_close_ = quit_on_close;
 }
 
+void Win32Window::SetDarkFrame(bool dark) {
+  if (app_dark_frame_ && *app_dark_frame_ == dark) return;
+  app_dark_frame_ = dark;
+  if (window_handle_) UpdateTheme(window_handle_);
+}
+
 bool Win32Window::OnCreate() {
   // No-op; provided for subclasses.
   return true;
@@ -273,6 +279,12 @@ void Win32Window::OnDestroy() {
 }
 
 void Win32Window::UpdateTheme(HWND const window) {
+  if (app_dark_frame_) {
+    const BOOL enable_dark_mode = *app_dark_frame_ ? TRUE : FALSE;
+    DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE,
+                         &enable_dark_mode, sizeof(enable_dark_mode));
+    return;
+  }
   DWORD light_mode;
   DWORD light_mode_size = sizeof(light_mode);
   LSTATUS result = RegGetValue(HKEY_CURRENT_USER, kGetPreferredBrightnessRegKey,

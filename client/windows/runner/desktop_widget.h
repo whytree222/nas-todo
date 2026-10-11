@@ -41,6 +41,7 @@ class DesktopWidget {
   std::wstring status_ = L"正在读取待办";
   std::wstring error_;
   std::string today_;
+  WidgetTheme theme_ = WidgetTheme::green;
   bool editing_ = false, pinned_ = true, auto_hide_ = true;
   bool menu_hover_ = false, menu_open_ = false, painted_ = false;
   bool collapsed_ = false, dragging_ = false, transition_ = false, save_settings_ = true;
@@ -58,6 +59,7 @@ class DesktopWidget {
   void Poll(POINT cursor, ULONGLONG now);
   void Save();
   void Paint();
+  void ApplyTheme();
   void ShowMenu();
   WidgetPaintInput PaintState() const;
   std::vector<Task> VisibleTasks() const;

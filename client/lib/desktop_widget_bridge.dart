@@ -8,6 +8,8 @@ import 'task_dates.dart';
 
 Map<String, dynamic> desktopWidgetState(AppController controller) => {
   'today': dateKey(DateTime.now()),
+  'theme': controller.effectiveWidgetTheme.name,
+  'app_theme': controller.appTheme.name,
   'editing': controller.editing,
   'status': controller.syncing ? '正在同步' : controller.pendingCount > 0
       ? '${controller.pendingCount} 项等待同步' : controller.isConfigured ? '已保存 · NAS 已配置' : '本机离线模式',

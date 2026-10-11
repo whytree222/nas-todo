@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../app_controller.dart';
+import '../appearance.dart';
+import '../theme.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, required this.controller});
@@ -53,6 +55,77 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _SettingsCard(
+            title: '外观与主题',
+            icon: Icons.palette_outlined,
+            children: [
+              Text('选择后立即保存。这些设置只属于当前设备。',
+                style: TextStyle(color: colors.onSurfaceVariant, height: 1.6)),
+              const SizedBox(height: 20),
+              const Text('应用主题', style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final color in TodoThemeColor.values)
+                    _ThemeChoice(
+                      choiceKey: ValueKey('app-theme-${color.name}'),
+                      color: color,
+                      label: color.label,
+                      semanticLabel: '应用主题：${color.label}',
+                      selected: controller.appTheme == color,
+                      enabled: !controller.savingAppearance,
+                      onSelected: () => controller.setAppearance(color, controller.widgetTheme),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 22),
+              const Text('小组件主题', style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              Text('安卓桌面和 Windows 小组件都可以单独选择颜色。',
+                style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12, height: 1.5)),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _ThemeChoice(
+                    choiceKey: const ValueKey('widget-theme-follow'),
+                    color: null,
+                    label: '跟随应用',
+                    semanticLabel: '小组件主题：跟随应用',
+                    selected: controller.widgetTheme == null,
+                    enabled: !controller.savingAppearance,
+                    onSelected: () => controller.setAppearance(controller.appTheme, null),
+                  ),
+                  for (final color in TodoThemeColor.values)
+                    _ThemeChoice(
+                      choiceKey: ValueKey('widget-theme-${color.name}'),
+                      color: color,
+                      label: color.label,
+                      semanticLabel: '小组件主题：${color.label}',
+                      selected: controller.widgetTheme == color,
+                      enabled: !controller.savingAppearance,
+                      onSelected: () => controller.setAppearance(controller.appTheme, color),
+                    ),
+                ],
+              ),
+              if (controller.savingAppearance) ...[
+                const SizedBox(height: 14),
+                Row(children: [
+                  const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                  const SizedBox(width: 10),
+                  Text('正在保存颜色', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+                ]),
+              ],
+              if (controller.appearanceError != null) ...[
+                const SizedBox(height: 14),
+                Text(controller.appearanceError!, style: TextStyle(color: colors.error, height: 1.5)),
+              ],
+            ],
+          ),
+          const SizedBox(height: 18),
           _SettingsCard(
             title: '连接你的 NAS',
             icon: Icons.dns_outlined,
@@ -174,7 +247,7 @@ class _SettingsCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colors.surface,
         border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.55)),
         borderRadius: BorderRadius.circular(22),
       ),
@@ -241,6 +314,57 @@ class _InfoLine extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ThemeChoice extends StatelessWidget {
+  const _ThemeChoice({
+    required this.choiceKey,
+    required this.color,
+    required this.label,
+    required this.semanticLabel,
+    required this.selected,
+    required this.enabled,
+    required this.onSelected,
+  });
+
+  final Key choiceKey;
+  final TodoThemeColor? color;
+  final String label;
+  final String semanticLabel;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      label: semanticLabel,
+      child: ChoiceChip(
+        key: choiceKey,
+        selected: selected,
+        showCheckmark: false,
+        backgroundColor: colors.surfaceContainerLow,
+        selectedColor: colors.primaryContainer,
+        side: BorderSide(color: colors.outlineVariant),
+        labelStyle: TextStyle(color: selected ? colors.onPrimaryContainer : colors.onSurface),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+        avatar: color == null
+            ? Icon(Icons.sync_rounded, size: 18, color: colors.primary)
+            : Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: themeSwatch(color!),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: colors.outlineVariant),
+                ),
+              ),
+        label: Text(label),
+        onSelected: enabled ? (_) => onSelected() : null,
+      ),
     );
   }
 }

@@ -164,7 +164,7 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
     return PopScope(
       canPop: !_saving,
       child: AlertDialog(
-        backgroundColor: const Color(0xfff8faf8),
+        backgroundColor: colors.surface,
         title: Row(
           children: [
             Icon(widget.task == null ? Icons.add_task_rounded : Icons.edit_note_rounded,

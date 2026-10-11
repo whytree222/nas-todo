@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nas_todo/appearance.dart';
 import 'package:nas_todo/app_controller.dart';
 import 'package:nas_todo/desktop_widget_bridge.dart';
 import 'package:nas_todo/sync_core.dart';
@@ -85,5 +86,36 @@ void main() {
     expect(encoded, isNot(contains('token')));
     expect(encoded, isNot(contains('server_url')));
     expect(await bridge.handleCall(const MethodCall('widgetComplete', {'id': 'missing', 'completed': true})), isFalse);
+  });
+  test('Native widget repaints when its override or followed app theme changes', () async {
+    final controller = await _controller(_Store());
+    addTearDown(controller.dispose);
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    const channel = MethodChannel('cn.privatetodo/desktop');
+    final themes = <String>[];
+    final appThemes = <String>[];
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      themes.add((call.arguments as Map)['theme'] as String);
+      appThemes.add((call.arguments as Map)['app_theme'] as String);
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    final bridge = DesktopWidgetBridge(controller);
+    await bridge.start();
+    addTearDown(bridge.dispose);
+    expect(themes.last, 'green');
+    await controller.setAppearance(TodoThemeColor.black, null);
+    await Future<void>.delayed(Duration.zero);
+    expect(themes.last, 'black');
+    await controller.setAppearance(TodoThemeColor.blue, TodoThemeColor.white);
+    await Future<void>.delayed(Duration.zero);
+    expect(themes.last, 'white');
+    expect(appThemes.last, 'blue');
+    await controller.setAppearance(TodoThemeColor.green, TodoThemeColor.white);
+    await Future<void>.delayed(Duration.zero);
+    expect(themes.last, 'white');
+    await controller.setAppearance(TodoThemeColor.blue, null);
+    await Future<void>.delayed(Duration.zero);
+    expect(themes.last, 'blue');
   });
 }

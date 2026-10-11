@@ -305,7 +305,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final controller = widget.controller;
     return Container(
       width: 236,
-      decoration: BoxDecoration(color: Colors.white, border: Border(right: BorderSide(color: colors.outlineVariant.withValues(alpha: 0.6)))),
+      decoration: BoxDecoration(color: colors.surface, border: Border(right: BorderSide(color: colors.outlineVariant.withValues(alpha: 0.6)))),
       padding: const EdgeInsets.fromLTRB(18, 30, 18, 22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -318,7 +318,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(color: colors.primary, borderRadius: BorderRadius.circular(12)),
-                  child: const Icon(Icons.done_all_rounded, color: Colors.white, size: 23),
+                  child: Icon(Icons.done_all_rounded, color: colors.onPrimary, size: 23),
                 ),
                 const SizedBox(width: 12),
                 Column(
@@ -364,7 +364,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           const SizedBox(height: 18),
           Container(
             padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: const Color(0xfff3f7f4), borderRadius: BorderRadius.circular(16)),
+            decoration: BoxDecoration(color: colors.surfaceContainerLow, borderRadius: BorderRadius.circular(16)),
             child: Row(
               children: [
                 Icon(Icons.dns_outlined, color: colors.primary, size: 20),
@@ -447,14 +447,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       width: double.infinity,
       padding: EdgeInsets.fromLTRB(16, compact ? 8 : 14, 10, compact ? 8 : 14),
       decoration: BoxDecoration(
-        color: hasConflicts ? const Color(0xfffff1d9) : const Color(0xffeaf3ed),
+        color: hasConflicts ? colors.tertiaryContainer : colors.primaryContainer.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
         children: [
           controller.syncing
               ? SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: colors.primary))
-              : Icon(hasConflicts ? Icons.compare_arrows_rounded : Icons.cloud_done_outlined, size: 24, color: hasConflicts ? const Color(0xff9b650b) : colors.primary),
+              : Icon(hasConflicts ? Icons.compare_arrows_rounded : Icons.cloud_done_outlined, size: 24, color: hasConflicts ? colors.onTertiaryContainer : colors.primary),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -514,7 +514,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
     final listFilter = Container(
       padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(color: Colors.white, border: Border.all(color: colors.outlineVariant), borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(color: colors.surface, border: Border.all(color: colors.outlineVariant), borderRadius: BorderRadius.circular(14)),
       child: DropdownButton<String>(
         value: _selectedList ?? '',
         isExpanded: true,
@@ -607,7 +607,7 @@ class _TaskCard extends StatelessWidget {
     final overdue = !task.completed && task.dueDate != null && task.dueDate!.compareTo(today) < 0;
     final dueToday = task.dueDate == today;
     return Material(
-      color: Colors.white,
+      color: colors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: colors.outlineVariant.withValues(alpha: 0.65))),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
@@ -648,23 +648,23 @@ class _TaskCard extends StatelessWidget {
                         spacing: 7,
                         runSpacing: 7,
                         children: [
-                          _TaskTag(label: task.listName, icon: Icons.folder_outlined, color: colors.onSurfaceVariant, background: const Color(0xfff2f5f2)),
+                          _TaskTag(label: task.listName, icon: Icons.folder_outlined, color: colors.onSurfaceVariant, background: colors.surfaceContainerLow),
                           if (task.dueDate != null)
                             _TaskTag(
                               label: '${overdue ? '已逾期 · ' : dueToday ? '今天 · ' : ''}${task.dueDate}',
                               icon: Icons.calendar_today_outlined,
-                              color: overdue ? const Color(0xffb44143) : dueToday ? colors.primary : colors.onSurfaceVariant,
-                              background: overdue ? const Color(0xffffeded) : const Color(0xfff2f5f2),
+                              color: overdue ? colors.onErrorContainer : dueToday ? colors.primary : colors.onSurfaceVariant,
+                              background: overdue ? colors.errorContainer : colors.surfaceContainerLow,
                             ),
                           if (task.priority > 0)
                             _TaskTag(
                               label: task.priority == 2 ? '紧急' : '较高',
                               icon: Icons.flag_outlined,
-                              color: task.priority == 2 ? const Color(0xffa84864) : const Color(0xff926019),
-                              background: task.priority == 2 ? const Color(0xffffedf2) : const Color(0xfffff4de),
+                              color: task.priority == 2 ? colors.onErrorContainer : colors.onTertiaryContainer,
+                              background: task.priority == 2 ? colors.errorContainer : colors.tertiaryContainer,
                             ),
                           if (conflict)
-                            const _TaskTag(label: '需要选择版本', icon: Icons.compare_arrows_rounded, color: Color(0xff9b650b), background: Color(0xfffff1d9)),
+                            _TaskTag(label: '需要选择版本', icon: Icons.compare_arrows_rounded, color: colors.onTertiaryContainer, background: colors.tertiaryContainer),
                         ],
                       ),
                     ],

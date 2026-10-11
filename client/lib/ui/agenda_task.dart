@@ -16,7 +16,7 @@ class AgendaTask extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Card(
       elevation: 0,
-      color: Colors.white,
+      color: colors.surface,
       child: ListTile(
         contentPadding: const EdgeInsets.only(left: 4, right: 12),
         leading: Checkbox(

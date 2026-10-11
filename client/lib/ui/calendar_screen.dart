@@ -103,7 +103,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             label: '$key，${tasks.length}项待办，$remaining项未完成',
             selected: selected,
             child: Material(
-              color: selected ? colors.primaryContainer : Colors.white,
+              color: selected ? colors.primaryContainer : colors.surface,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10),
                 side: BorderSide(color: key == today ? colors.primary : Colors.transparent)),
               child: InkWell(

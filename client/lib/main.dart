@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter/services.dart';
 
 import 'app_controller.dart';
+import 'appearance.dart';
 import 'android_widget.dart';
 import 'desktop_widget_bridge.dart';
+import 'theme.dart';
 import 'ui/home_screen.dart';
 
 Future<void> main() async {
@@ -51,6 +54,7 @@ class _StartupFailureState extends State<_StartupFailure> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      theme: buildTodoTheme(TodoThemeColor.green),
       home: Scaffold(
         body: Center(
           child: ConstrainedBox(
@@ -86,11 +90,9 @@ class PrivateTodoApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = ColorScheme.fromSeed(
-      seedColor: const Color(0xff326b58),
-      brightness: Brightness.light,
-    );
-    return MaterialApp(
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) => MaterialApp(
       title: '私有待办',
       debugShowCheckedModeBanner: false,
       locale: const Locale('zh', 'CN'),
@@ -100,47 +102,23 @@ class PrivateTodoApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: colors,
-        scaffoldBackgroundColor: const Color(0xfff6f8f6),
-        fontFamilyFallback: const ['Microsoft YaHei', 'Noto Sans CJK SC'],
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xfff6f8f6),
-          elevation: 0,
-          scrolledUnderElevation: 0,
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: colors.outlineVariant),
+      theme: buildTodoTheme(controller.appTheme),
+      builder: (context, child) {
+        final theme = Theme.of(context);
+        final dark = theme.brightness == Brightness.dark;
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+            statusBarBrightness: dark ? Brightness.dark : Brightness.light,
+            systemNavigationBarColor: theme.colorScheme.surface,
+            systemNavigationBarIconBrightness: dark ? Brightness.light : Brightness.dark,
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: colors.outlineVariant),
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        ),
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(0, 46),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-        ),
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size(0, 44),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-        ),
-        navigationBarTheme: NavigationBarThemeData(
-          backgroundColor: Colors.white,
-          indicatorColor: colors.primaryContainer,
-        ),
-      ),
+          child: child!,
+        );
+      },
       home: HomeScreen(controller: controller),
+    ),
     );
   }
 }

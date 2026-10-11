@@ -88,7 +88,7 @@ std::string Today() {
   return date;
 }
 
-EncodableMap State(const std::vector<PreviewTask>& tasks) {
+EncodableMap State(const std::vector<PreviewTask>& tasks, const std::string& theme) {
   const std::string date = Today();
   EncodableList rows;
   for (const auto& task : tasks) {
@@ -106,6 +106,7 @@ EncodableMap State(const std::vector<PreviewTask>& tasks) {
       {EncodableValue("editing"), EncodableValue(false)},
       {EncodableValue("status"), EncodableValue("已同步")},
       {EncodableValue("error"), EncodableValue("")},
+      {EncodableValue("theme"), EncodableValue(theme)},
       {EncodableValue("tasks"), EncodableValue(rows)},
   };
 }
@@ -147,6 +148,7 @@ int wmain(int argc, wchar_t** argv) {
   bool live_export = false;
   bool self_test = false;
   bool pattern_backdrop = false;
+  std::string theme = "green";
   std::wstring path = L"preview-widget.png";
   for (int i = 1; i < argc; ++i) {
     const std::wstring argument = argv[i];
@@ -154,6 +156,16 @@ int wmain(int argc, wchar_t** argv) {
       self_test = true;
     } else if (argument == L"--pattern-backdrop") {
       pattern_backdrop = true;
+    } else if (argument == L"--theme" && i + 1 < argc) {
+      const std::wstring value = argv[++i];
+      if (value == L"black") theme = "black";
+      else if (value == L"white") theme = "white";
+      else if (value == L"green") theme = "green";
+      else if (value == L"blue") theme = "blue";
+      else {
+        std::printf("Widget preview: theme must be black, white, green, or blue\n");
+        return 2;
+      }
     } else if (argument == L"--export" || argument == L"--live-export") {
       export_image = true;
       live_export = argument == L"--live-export";
@@ -162,7 +174,8 @@ int wmain(int argc, wchar_t** argv) {
       }
     } else {
       std::printf("Usage: widget_preview [--self-test] [--export [PNG path]] "
-                  "[--live-export [PNG path]] [--pattern-backdrop]\n");
+                  "[--live-export [PNG path]] [--pattern-backdrop] "
+                  "[--theme black|white|green|blue]\n");
       return 2;
     }
   }
@@ -190,21 +203,21 @@ int wmain(int argc, wchar_t** argv) {
         for (auto& task : tasks) {
           if (id == task.id) task.completed = completed;
         }
-        if (active_widget) active_widget->Update(State(tasks));
+        if (active_widget) active_widget->Update(State(tasks, theme));
       },
       []() { std::printf("Widget preview: open application\n"); },
       [&]() {
-        if (active_widget) active_widget->Update(State(tasks));
+        if (active_widget) active_widget->Update(State(tasks, theme));
         std::printf("Widget preview: sync\n");
       },
       []() { PostQuitMessage(0); });
   active_widget = &widget;
-  widget.Update(State(tasks));
+  widget.Update(State(tasks, theme));
   if (!widget.Create(false)) {
     std::printf("Widget preview: window creation failed\n");
     return 4;
   }
-  widget.Update(State(tasks));
+  widget.Update(State(tasks, theme));
 
   if (pattern_backdrop) {
     const HWND native = FindWindowW(L"CN_PRIVATE_TODO_DESKTOP_WIDGET", nullptr);

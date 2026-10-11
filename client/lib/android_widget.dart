@@ -9,9 +9,12 @@ import 'app_controller.dart';
 import 'sync_core.dart';
 
 // A display snapshot contains no notes, server address or synchronization key.
-String widgetSnapshot(Iterable<Task> tasks, Iterable<SyncConflict> conflicts) {
+String widgetSnapshot(Iterable<Task> tasks, Iterable<SyncConflict> conflicts,
+    {String theme = 'green'}) {
   final blocked = conflicts.map((conflict) => conflict.taskId).toSet();
-  return jsonEncode({'tasks': [
+  final color = const {'black', 'white', 'green', 'blue'}.contains(theme)
+      ? theme : 'green';
+  return jsonEncode({'theme': color, 'tasks': [
     for (final task in tasks.where((task) => !task.deleted)) {
       'id': task.id, 'title': task.title, 'due_date': task.dueDate,
       'completed': task.completed, 'priority': task.priority,
@@ -80,7 +83,8 @@ class AndroidWidgetBridge with WidgetsBindingObserver {
           final saved = await applyWidgetActions(controller, actions);
           if (saved.isNotEmpty) await _channel.invokeMethod<void>('ackWidgetActions', saved);
         }
-        final snapshot = widgetSnapshot(controller.tasks, controller.conflicts);
+        final snapshot = widgetSnapshot(controller.tasks, controller.conflicts,
+            theme: controller.effectiveWidgetTheme.name);
         if (snapshot != _published) {
           await _channel.invokeMethod<void>('updateWidget', snapshot);
           _published = snapshot;
