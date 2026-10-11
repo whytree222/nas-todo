@@ -254,11 +254,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
             child: InkWell(key: ValueKey('day-$key'), borderRadius: BorderRadius.circular(12), onTap: () => _select(day),
               child: LayoutBuilder(builder: (context, constraints) => Padding(padding: const EdgeInsets.all(4), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Row(children: [
-                  Text('${day.day}', style: TextStyle(fontSize: 12,
+                  Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
+                    child: Text('${day.day}', style: TextStyle(fontSize: 12,
                     fontWeight: selected || today ? FontWeight.w700 : FontWeight.w400,
-                    color: currentMonth ? colors.onSurface : colors.onSurfaceVariant)),
-                  const Spacer(),
-                  if (tasks.isNotEmpty && constraints.maxWidth >= 64) Text('$remaining/${tasks.length}', style: TextStyle(fontSize: 9, color: colors.primary)),
+                    color: currentMonth ? colors.onSurface : colors.onSurfaceVariant)))),
+                  if (tasks.isNotEmpty && constraints.maxWidth >= 64)
+                    Flexible(child: Text('$remaining/${tasks.length}', maxLines: 1, overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right, style: TextStyle(fontSize: 9, color: colors.primary))),
                 ]),
                 const SizedBox(height: 4),
                 for (final task in tasks) _calendarTask(task, taskHeight),
