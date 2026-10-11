@@ -223,7 +223,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ],
               ),
             ),
-            floatingActionButton: !wide && _page != 4
+            floatingActionButton: !wide && _page != 4 && _page != 3
                 ? FloatingActionButton.extended(
                     onPressed: widget.controller.editing
                         ? null
@@ -286,8 +286,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (DesktopWindow.supported)
           IconButton(tooltip: '桌面小组件', onPressed: _openWidget,
             icon: const Icon(Icons.picture_in_picture_alt_rounded)),
-        if (wide && _page != 4) ...[
-          const SizedBox(width: 16),
+        if ((wide && _page != 4) || _page == 3) ...[
+          SizedBox(width: wide ? 16 : 8),
           FilledButton.icon(
             onPressed: widget.controller.editing
                 ? null

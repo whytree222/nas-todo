@@ -1,7 +1,7 @@
 name: nas_todo
 description: Private offline-first todo app for Android and Windows, synced to your NAS.
 publish_to: none
-version: 0.6.0+6
+version: 0.6.1+7
 
 environment:
   sdk: '>=3.8.0 <4.0.0'

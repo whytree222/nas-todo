@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 
 import '../app_controller.dart';
 import '../sync_core.dart';
@@ -21,12 +22,23 @@ class CalendarScreen extends StatefulWidget {
   State<CalendarScreen> createState() => _CalendarScreenState();
 }
 
+class _CalendarScrollBehavior extends MaterialScrollBehavior {
+  const _CalendarScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+    ...super.dragDevices, PointerDeviceKind.mouse,
+  };
+
+  @override
+  Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) => child;
+}
+
 class _CalendarScreenState extends State<CalendarScreen> {
   late DateTime _month;
   late DateTime _selected;
   bool _unscheduled = false;
   final _vertical = ScrollController();
-  final _horizontal = ScrollController();
   final _viewportKey = GlobalKey();
   String? _dragId;
   Offset? _dragPoint;
@@ -45,7 +57,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
   void dispose() {
     _dragScroll?.cancel();
     _vertical.dispose();
-    _horizontal.dispose();
     super.dispose();
   }
 
@@ -97,7 +108,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     if (point == null || box is! RenderBox || !box.hasSize) return;
     final rect = box.localToGlobal(Offset.zero) & box.size;
     // The fixed tray sits outside the viewport; scrolling starts only after the
-    // pointer enters the calendar, and continues near its four visible edges.
+    // pointer enters the calendar, and continues near its visible top/bottom.
     if (!rect.inflate(6).contains(point)) return;
     double speed(double position, double low, double high) {
       if (position < low + 36) return -10;
@@ -110,7 +121,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
       controller.jumpTo((position.pixels + delta).clamp(position.minScrollExtent, position.maxScrollExtent));
     }
     move(_vertical, speed(point.dy, rect.top, rect.bottom));
-    move(_horizontal, speed(point.dx, rect.left, rect.right));
   }
 
   @override
@@ -119,8 +129,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
     builder: (context, _) => LayoutBuilder(builder: (context, constraints) {
       if (constraints.maxWidth >= 760) {
         return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Expanded(child: SizedBox(key: _viewportKey,
-            child: SingleChildScrollView(controller: _vertical, child: _calendar()))),
+          Expanded(child: _viewport(SingleChildScrollView(controller: _vertical,
+            child: _calendar(constraints.maxHeight)))),
           const SizedBox(width: 20),
           SizedBox(width: 280, child: Column(children: [
             SizedBox(height: math.min(240.0, constraints.maxHeight * 0.45), child: _unscheduledTray(false)),
@@ -129,21 +139,43 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ])),
         ]);
       }
+      final trayHeight = math.min(math.min(136.0, constraints.maxHeight * 0.65),
+        math.max(112.0, constraints.maxHeight * 0.36));
       return Column(children: [
-        Expanded(child: SizedBox(key: _viewportKey, child: ListView(
-          controller: _vertical, padding: const EdgeInsets.only(bottom: 90),
-          children: [_calendar(), const SizedBox(height: 16), ..._agenda()],
+        Expanded(child: _viewport(ListView(
+          controller: _vertical, padding: const EdgeInsets.only(bottom: 16),
+          children: [_calendar(constraints.maxHeight - trayHeight - 8), const SizedBox(height: 16), ..._agenda()],
         ))),
         const SizedBox(height: 8),
-        SizedBox(height: math.min(136.0, constraints.maxHeight * 0.36), child: _unscheduledTray(true)),
+        SizedBox(height: trayHeight, child: _unscheduledTray(true)),
       ]);
     }),
   );
 
-  Widget _calendar() {
+  Widget _viewport(Widget child) => SizedBox(key: _viewportKey,
+    child: ScrollConfiguration(behavior: const _CalendarScrollBehavior(),
+      child: Scrollbar(key: const ValueKey('calendar-scrollbar'), controller: _vertical,
+        thumbVisibility: true, interactive: true,
+        child: Padding(key: const ValueKey('calendar-viewport'),
+          padding: const EdgeInsets.only(right: 10), child: child))));
+
+  Widget _calendar(double availableHeight) {
     final colors = Theme.of(context).colorScheme;
     final first = DateTime(_month.year, _month.month);
     final start = DateTime(first.year, first.month, 1 - (first.weekday - 1));
+    final last = DateTime(_month.year, _month.month + 1, 0);
+    final weeks = ((first.weekday - 1 + last.day) / 7).ceil();
+    final scaler = MediaQuery.textScalerOf(context);
+    final taskHeight = math.max(23.0, scaler.scale(11) + 8);
+    final headerHeight = scaler.scale(12) + 6;
+    // Prefer a complete month. Keep readable task rows on short windows and
+    // let the scoped mouse/touch scroll view reveal the remaining weeks.
+    final minimumCellHeight = 16 + headerHeight + taskHeight + scaler.scale(10) + 5;
+    final chromeHeight = 148 + scaler.scale(11) + scaler.scale(14);
+    final cellHeight = ((availableHeight - chromeHeight - (weeks - 1) * 4) / weeks)
+      .clamp(minimumCellHeight, math.max(132.0, minimumCellHeight)).toDouble();
+    final previewCount = ((cellHeight - 16 - headerHeight - scaler.scale(10) - 5) / (taskHeight + 3))
+      .floor().clamp(1, 3).toInt();
     return Column(children: [
       Row(children: [
         IconButton(tooltip: '上个月', onPressed: () => _moveMonth(-1), icon: const Icon(Icons.chevron_left_rounded)),
@@ -153,24 +185,21 @@ class _CalendarScreenState extends State<CalendarScreen> {
         TextButton(onPressed: () => _select(DateTime.now()), child: const Text('今天')),
       ]),
       const SizedBox(height: 10),
-      LayoutBuilder(builder: (context, constraints) => SingleChildScrollView(
-        controller: _horizontal, scrollDirection: Axis.horizontal,
-        child: SizedBox(width: math.max(700.0, constraints.maxWidth), child: Column(children: [
+      Column(children: [
           Row(children: [for (final label in ['一', '二', '三', '四', '五', '六', '日'])
             Expanded(child: Center(child: Text(label, style: TextStyle(color: colors.onSurfaceVariant))))]),
           const SizedBox(height: 8),
           GridView.builder(
             shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-            itemCount: 42,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 7, mainAxisExtent: 132, crossAxisSpacing: 4, mainAxisSpacing: 4),
-            itemBuilder: (context, index) => _day(DateTime(start.year, start.month, start.day + index)),
+            itemCount: weeks * 7,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7, mainAxisExtent: cellHeight, crossAxisSpacing: 4, mainAxisSpacing: 4),
+            itemBuilder: (context, index) => _day(DateTime(start.year, start.month, start.day + index), previewCount, taskHeight),
           ),
-        ])),
-      )),
+      ]),
       const SizedBox(height: 10),
-      Text('勾选完成 · 拖入未安排待办 · 滑动查看更多日期',
-        style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant)),
+      Text('整月显示 · 勾选完成 · 按住空白拖动或滚动查看',
+        textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant)),
       const SizedBox(height: 6),
       Align(alignment: Alignment.centerLeft, child: FilterChip(
         label: Text('未安排 · ${tasksOnDate(widget.controller.tasks, null).length}'),
@@ -183,7 +212,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     ]);
   }
 
-  Widget _day(DateTime day) {
+  Widget _day(DateTime day, int previewCount, double taskHeight) {
     final colors = Theme.of(context).colorScheme;
     final key = dateKey(day);
     final tasks = tasksOnDate(widget.controller.tasks, key);
@@ -213,22 +242,23 @@ class _CalendarScreenState extends State<CalendarScreen> {
               width: hovered ? 2 : 1,
               color: hovered ? colors.primary : today ? colors.primary : colors.outlineVariant.withValues(alpha: 0.5))),
             child: InkWell(key: ValueKey('day-$key'), borderRadius: BorderRadius.circular(12), onTap: () => _select(day),
-              child: Padding(padding: const EdgeInsets.all(6), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              child: LayoutBuilder(builder: (context, constraints) => Padding(padding: const EdgeInsets.all(4), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Row(children: [
                   Text('${day.day}', style: TextStyle(fontSize: 12,
                     fontWeight: selected || today ? FontWeight.w700 : FontWeight.w400,
                     color: currentMonth ? colors.onSurface : colors.onSurfaceVariant)),
                   const Spacer(),
-                  if (tasks.isNotEmpty) Text('$remaining/${tasks.length}', style: TextStyle(fontSize: 9, color: colors.primary)),
+                  if (tasks.isNotEmpty && constraints.maxWidth >= 64) Text('$remaining/${tasks.length}', style: TextStyle(fontSize: 9, color: colors.primary)),
                 ]),
                 const SizedBox(height: 4),
-                for (final task in tasks.take(3)) _calendarTask(task),
-                if (tasks.length > 3)
+                for (final task in tasks.take(previewCount)) _calendarTask(task, taskHeight),
+                if (tasks.length > previewCount)
                   InkWell(key: ValueKey('more-$key'), onTap: () => _showDay(day),
                     child: Padding(padding: const EdgeInsets.only(top: 3),
-                      child: Text('+${tasks.length - 3} 项', style: TextStyle(fontSize: 10, color: colors.primary)))),
+                      child: Text('+${tasks.length - previewCount} 项', maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 10, color: colors.primary)))),
                 if (hovered && tasks.isEmpty) Expanded(child: Center(child: Icon(Icons.add_task_rounded, color: colors.primary))),
-              ])),
+              ]))),
             ),
           ),
         );
@@ -236,20 +266,20 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
-  Widget _calendarTask(Task task) {
+  Widget _calendarTask(Task task, double height) {
     final colors = Theme.of(context).colorScheme;
     final conflict = widget.controller.conflicts.any((item) => item.taskId == task.id);
     return Tooltip(message: task.title, child: InkWell(
       key: ValueKey('calendar-complete-${task.id}'),
       borderRadius: BorderRadius.circular(5),
       onTap: widget.controller.editing || conflict ? null : () => widget.controller.setCompleted(task.id, !task.completed),
-      child: Container(height: 23, margin: const EdgeInsets.only(bottom: 3),
-        padding: const EdgeInsets.symmetric(horizontal: 3),
+      child: Container(height: height, margin: const EdgeInsets.only(bottom: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 2),
         decoration: BoxDecoration(color: colors.surfaceContainerHigh.withValues(alpha: 0.65), borderRadius: BorderRadius.circular(5)),
         child: Row(children: [
           Icon(conflict ? Icons.compare_arrows_rounded : task.completed ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
-            size: 12, color: conflict ? colors.error : colors.primary),
-          const SizedBox(width: 3),
+            size: 10, color: conflict ? colors.error : colors.primary),
+          const SizedBox(width: 2),
           Expanded(child: Text(task.title, key: ValueKey('calendar-title-${task.id}'), maxLines: 1, overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 11, decoration: task.completed ? TextDecoration.lineThrough : null,
               color: task.completed ? colors.onSurfaceVariant : colors.onSurface))),
@@ -278,7 +308,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
       decoration: BoxDecoration(color: colors.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: colors.outlineVariant)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('未安排 · ${tasks.length}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-        Text(compact ? '长按卡片拖到日期，可在边缘停留滚动' : '拖动卡片到日期，可在边缘停留滚动',
+        Text([TargetPlatform.android, TargetPlatform.iOS].contains(Theme.of(context).platform)
+          ? '长按卡片拖到日期，可在边缘停留滚动' : '拖动卡片到日期，可在边缘停留滚动',
           maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10, color: colors.onSurfaceVariant)),
         const SizedBox(height: 8),
         Expanded(child: tasks.isEmpty ? Center(child: Text('没有未安排待办', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)))

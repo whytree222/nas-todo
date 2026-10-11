@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nas_todo/app_controller.dart';
 import 'package:nas_todo/sync_core.dart';
@@ -43,7 +44,8 @@ Future<void> _screen(WidgetTester tester, AppController controller, {bool phone 
 Future<void> _drop(WidgetTester tester, String id, {bool phone = false, bool cancel = false}) async {
   final source = find.byKey(ValueKey('drag-$id'));
   final target = find.byKey(const ValueKey('drop-2024-02-01'));
-  final gesture = await tester.startGesture(tester.getCenter(source));
+  final gesture = await tester.startGesture(tester.getCenter(source),
+    kind: phone ? PointerDeviceKind.touch : PointerDeviceKind.mouse);
   if (phone) await tester.pump(const Duration(milliseconds: 350));
   await gesture.moveBy(const Offset(0, -8));
   await tester.pump();
@@ -171,13 +173,16 @@ void main() {
     }
     await _screen(tester, controller, phone: true);
     final firstId = controller.tasks.first.id;
+    final previewCount = controller.tasks.where((task) =>
+      find.byKey(ValueKey('calendar-title-${task.id}')).evaluate().isNotEmpty).length;
+    expect(previewCount, inInclusiveRange(1, 3));
     await tester.tap(find.byKey(ValueKey('calendar-complete-$firstId')));
     await tester.pumpAndSettle();
     expect(tester.widget<Text>(find.byKey(ValueKey('calendar-title-$firstId'))).style!.decoration, TextDecoration.lineThrough);
     await tester.tap(find.byKey(const ValueKey('more-2024-02-01')));
     await tester.pumpAndSettle();
     expect(find.byType(BottomSheet), findsOneWidget);
-    expect(find.text('+2 项'), findsOneWidget);
+    expect(find.text('+${5 - previewCount} 项'), findsOneWidget);
     final last = find.descendant(of: find.byType(BottomSheet),
       matching: find.text('很长的日历待办名称需要正确省略而且仍然可以查看完整内容4'));
     await tester.scrollUntilVisible(last, 180,
