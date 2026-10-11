@@ -170,6 +170,10 @@ void main() {
       await controller.saveTask(TaskDraft(title: '很长的日历待办名称需要正确省略而且仍然可以查看完整内容$i', dueDate: '2024-02-01'));
     }
     await _screen(tester, controller, phone: true);
+    final firstId = controller.tasks.first.id;
+    await tester.tap(find.byKey(ValueKey('calendar-complete-$firstId')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<Text>(find.byKey(ValueKey('calendar-title-$firstId'))).style!.decoration, TextDecoration.lineThrough);
     await tester.tap(find.byKey(const ValueKey('more-2024-02-01')));
     await tester.pumpAndSettle();
     expect(find.byType(BottomSheet), findsOneWidget);

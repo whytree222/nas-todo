@@ -187,6 +187,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final colors = Theme.of(context).colorScheme;
     final key = dateKey(day);
     final tasks = tasksOnDate(widget.controller.tasks, key);
+    // Keep a completed entry in its preview slot so its strike-through remains
+    // visible instead of being moved under the overflow count.
+    tasks.sort((a, b) {
+      final priority = b.priority.compareTo(a.priority);
+      if (priority != 0) return priority;
+      final title = a.title.compareTo(b.title);
+      return title != 0 ? title : a.id.compareTo(b.id);
+    });
     final remaining = tasks.where((task) => !task.completed).length;
     final selected = !_unscheduled && key == dateKey(_selected);
     final currentMonth = day.month == _month.month;
