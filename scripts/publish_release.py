@@ -1,4 +1,4 @@
-"""Publish a specified successful build to a verified private prerelease."""
+"""Publish a successful build with an explicitly selected repository visibility."""
 import hashlib
 import json
 import os
@@ -12,6 +12,9 @@ import zipfile
 BUILD_RUN = int(os.environ.get('NAS_TODO_BUILD_RUN', '37900998859'))
 BUILD_SHA = os.environ.get('NAS_TODO_BUILD_SHA', 'bc35fc387f926ffb9370369974961cb257a0ceb2')
 VERSION = os.environ.get('NAS_TODO_RELEASE_VERSION', '0.1.0')
+VISIBILITY = os.environ.get('NAS_TODO_RELEASE_VISIBILITY', 'private')
+if VISIBILITY not in {'private', 'public'}:
+    raise ValueError('Invalid approved repository visibility')
 if not re.fullmatch(r'\d+\.\d+\.\d+', VERSION) or not re.fullmatch(r'[0-9a-f]{40}', BUILD_SHA):
     raise ValueError('Invalid release version or source commit')
 TAG = 'v' + VERSION
@@ -52,7 +55,10 @@ def verify_pe(path):
 
 def main():
     repo = os.environ['GH_REPO']
-    check(api(f'repos/{repo}')['private'], 'Publication requires a private repository')
+    repository = api(f'repos/{repo}')
+    expected_private = VISIBILITY == 'private'
+    check(repository['private'] == expected_private,
+          f'Publication requires the approved {VISIBILITY} repository visibility')
     run = api(f'repos/{repo}/actions/runs/{BUILD_RUN}')
     check(run['conclusion'] == 'success' and run['head_sha'] == BUILD_SHA,
           'Source build must be successful at the verified commit')
@@ -120,16 +126,17 @@ def main():
     published = api(f'repos/{repo}/releases/tags/{TAG}')
     check(not published['draft'] and published['prerelease'], 'Prerelease publication failed')
     check(api(f'repos/{repo}/commits/{TAG}')['sha'] == BUILD_SHA, 'Published tag source mismatch')
-    print('PRIVATE_RELEASE_VERIFIED ' + json.dumps({
+    print('RELEASE_VERIFIED ' + json.dumps({
         'url': published['html_url'], 'tag': TAG, 'source_sha': BUILD_SHA,
-        'private': True, 'prerelease': published['prerelease'],
+        'private': repository['private'], 'visibility': VISIBILITY,
+        'prerelease': published['prerelease'],
         'assets': [{k: a[k] for k in ('name', 'size', 'digest', 'browser_download_url')}
                    for a in published['assets']],
     }, ensure_ascii=False))
     summary = os.environ.get('GITHUB_STEP_SUMMARY')
     if summary:
         with open(summary, 'a', encoding='utf-8') as output:
-            output.write(f"Private test release published: {published['html_url']}\n")
+            output.write(f"{VISIBILITY.capitalize()} test release published: {published['html_url']}\n")
 
 
 if __name__ == '__main__':

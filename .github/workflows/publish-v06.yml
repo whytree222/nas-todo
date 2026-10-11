@@ -1,4 +1,4 @@
-name: Publish v0.6.0 private test release
+name: Publish v0.6.0 public test release
 
 on:
   workflow_dispatch:
@@ -27,7 +27,7 @@ jobs:
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner, repo: context.repo.repo, sha: context.sha,
               state: 'pending', context: 'nas-todo/release-v0.6.0',
-              description: 'Preparing private v0.6.0 test release',
+              description: 'Preparing public v0.6.0 test release',
               target_url: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
             });
       - uses: actions/checkout@v4
@@ -66,13 +66,14 @@ jobs:
           path: release-input/windows
           run-id: 38121339641
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Verify packages and publish private prerelease
+      - name: Verify packages and publish approved public prerelease
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           NAS_TODO_BUILD_RUN: '38121339641'
           NAS_TODO_BUILD_SHA: '9da1d2dbcc5b29b4ed3bf49d4210fc9b006edcf2'
           NAS_TODO_RELEASE_VERSION: '0.6.0'
+          NAS_TODO_RELEASE_VISIBILITY: 'public'
         run: python scripts/publish_release.py
       - name: Report release result
         if: always()
@@ -83,7 +84,7 @@ jobs:
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner, repo: context.repo.repo, sha: context.sha,
               state: passed ? 'success' : 'failure', context: 'nas-todo/release-v0.6.0',
-              description: passed ? 'Private v0.6.0 test release published' : 'Private release publication failed',
+              description: passed ? 'Public v0.6.0 test release published' : 'Public release publication failed',
               target_url: passed
                 ? '${{ github.server_url }}/${{ github.repository }}/releases/tag/v0.6.0'
                 : '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
