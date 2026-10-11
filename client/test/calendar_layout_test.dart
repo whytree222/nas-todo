@@ -83,6 +83,64 @@ Future<void> _mousePan(WidgetTester tester, Offset from, Offset delta) async {
 }
 
 void main() {
+  for (final platform in [TargetPlatform.android, TargetPlatform.windows]) {
+    testWidgets('All twelve tasks for today are reachable and completion stays visible on $platform',
+        (tester) async {
+      _size(tester, platform == TargetPlatform.android ? const Size(320, 568) : const Size(1280, 800));
+      final controller = await _controller();
+      addTearDown(controller.dispose);
+      final today = dateKey(DateTime.now());
+      for (var index = 0; index < 12; index++) {
+        await controller.saveTask(TaskDraft(title: '今天的待办 ${index.toString().padLeft(2, "0")}', dueDate: today));
+      }
+      await controller.saveTask(TaskDraft(title: '已删除的待办', dueDate: today));
+      final deletedId = controller.tasks.last.id;
+      await controller.deleteTask(deletedId);
+      await _openAppCalendar(tester, controller);
+      final tasks = controller.tasks.where((task) => !task.deleted).toList();
+      for (final task in tasks) {
+        expect(find.byKey(ValueKey('calendar-title-${task.id}')), findsOneWidget);
+      }
+      expect(find.byKey(ValueKey('calendar-title-$deletedId')), findsNothing);
+      final last = tasks.last;
+      final title = find.byKey(ValueKey('calendar-title-${last.id}'));
+      await tester.ensureVisible(title);
+      await tester.pumpAndSettle();
+      _inside(tester.getRect(title), tester.getRect(_viewport));
+      expect(_position(tester).pixels, greaterThan(0));
+      await tester.tap(find.byKey(ValueKey('calendar-complete-${last.id}')));
+      await tester.pumpAndSettle();
+      expect(controller.tasks.firstWhere((task) => task.id == last.id).completed, isTrue);
+      expect(tester.widget<Text>(title).style!.decoration, TextDecoration.lineThrough);
+      for (final task in tasks) {
+        expect(find.byKey(ValueKey('calendar-title-${task.id}')), findsOneWidget);
+      }
+      expect(tester.takeException(), isNull);
+    }, variant: TargetPlatformVariant({platform}));
+  }
+
+  testWidgets('Expanded dates with enlarged text keep every task inside their cell', (tester) async {
+    _size(tester, const Size(320, 568));
+    final controller = await _controller();
+    addTearDown(controller.dispose);
+    for (var index = 0; index < 8; index++) {
+      await controller.saveTask(TaskDraft(title: '放大字体任务 $index', dueDate: '2025-03-31'));
+    }
+    await tester.pumpWidget(MaterialApp(builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(1.5)), child: child!),
+      home: Scaffold(body: CalendarScreen(controller: controller, initialDate: DateTime(2025, 3)))));
+    await tester.pumpAndSettle();
+    final cell = tester.getRect(_day(DateTime(2025, 3, 31)));
+    for (final task in controller.tasks) {
+      final title = find.byKey(ValueKey('calendar-title-${task.id}'));
+      expect(title, findsOneWidget);
+      _inside(tester.getRect(title), cell);
+    }
+    await tester.ensureVisible(find.byKey(const ValueKey('more-2025-03-31')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  }, variant: const TargetPlatformVariant({TargetPlatform.android}));
+
   for (final size in const [
     Size(390, 844),
     Size(390, 500),
@@ -119,6 +177,9 @@ void main() {
       expect(newTask.overlaps(tray), isFalse);
       if (size == const Size(1280, 800)) {
         _inside(tester.getRect(_day(first)), viewport);
+        // Busy weeks grow to show all tasks; scrolling keeps month end reachable.
+        await tester.ensureVisible(_day(DateTime(now.year, now.month + 1, 0)));
+        await tester.pumpAndSettle();
         _inside(tester.getRect(_day(DateTime(now.year, now.month + 1, 0))),
             viewport);
       }
@@ -180,7 +241,7 @@ void main() {
     expect(tester.takeException(), isNull);
   }, variant: const TargetPlatformVariant({TargetPlatform.windows}));
 
-  testWidgets('Compact populated last-week cells show overflow without clipping '
+  testWidgets('Compact populated last-week cells expand without clipping '
       'and still reveal every task', (tester) async {
     _size(tester, const Size(320, 568));
     final controller = await _controller();

@@ -165,7 +165,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Overflow opens all daily tasks and long titles fit narrow phone screens', (tester) async {
+  testWidgets('All daily tasks are expanded and details show full titles on narrow phones', (tester) async {
     final controller = await _controller(_Store());
     addTearDown(controller.dispose);
     for (var i = 0; i < 5; i++) {
@@ -173,16 +173,16 @@ void main() {
     }
     await _screen(tester, controller, phone: true);
     final firstId = controller.tasks.first.id;
-    final previewCount = controller.tasks.where((task) =>
+    final shownCount = controller.tasks.where((task) =>
       find.byKey(ValueKey('calendar-title-${task.id}')).evaluate().isNotEmpty).length;
-    expect(previewCount, inInclusiveRange(1, 3));
+    expect(shownCount, 5);
     await tester.tap(find.byKey(ValueKey('calendar-complete-$firstId')));
     await tester.pumpAndSettle();
     expect(tester.widget<Text>(find.byKey(ValueKey('calendar-title-$firstId'))).style!.decoration, TextDecoration.lineThrough);
     await tester.tap(find.byKey(const ValueKey('more-2024-02-01')));
     await tester.pumpAndSettle();
     expect(find.byType(BottomSheet), findsOneWidget);
-    expect(find.text('+${5 - previewCount} 项'), findsOneWidget);
+    expect(find.text('详情'), findsOneWidget);
     final last = find.descendant(of: find.byType(BottomSheet),
       matching: find.text('很长的日历待办名称需要正确省略而且仍然可以查看完整内容4'));
     await tester.scrollUntilVisible(last, 180,

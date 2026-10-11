@@ -166,16 +166,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final last = DateTime(_month.year, _month.month + 1, 0);
     final weeks = ((first.weekday - 1 + last.day) / 7).ceil();
     final scaler = MediaQuery.textScalerOf(context);
-    final taskHeight = math.max(23.0, scaler.scale(11) + 8);
-    final headerHeight = scaler.scale(12) + 6;
-    // Prefer a complete month. Keep readable task rows on short windows and
-    // let the scoped mouse/touch scroll view reveal the remaining weeks.
-    final minimumCellHeight = 16 + headerHeight + taskHeight + scaler.scale(10) + 5;
+    final taskHeight = math.max(25.0, scaler.scale(11) * 1.5 + 8);
+    final headerHeight = math.max(18.0, scaler.scale(12) * 1.5);
+    final detailsHeight = math.max(20.0, scaler.scale(10) * 1.5 + 4);
     final chromeHeight = 148 + scaler.scale(11) + scaler.scale(14);
     final cellHeight = ((availableHeight - chromeHeight - (weeks - 1) * 4) / weeks)
-      .clamp(minimumCellHeight, math.max(132.0, minimumCellHeight)).toDouble();
-    final previewCount = ((cellHeight - 16 - headerHeight - scaler.scale(10) - 5) / (taskHeight + 3))
-      .floor().clamp(1, 3).toInt();
+      .clamp(48.0, 132.0).toDouble();
     return Column(children: [
       Row(children: [
         IconButton(tooltip: '上个月', onPressed: () => _moveMonth(-1), icon: const Icon(Icons.chevron_left_rounded)),
@@ -189,16 +185,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
           Row(children: [for (final label in ['一', '二', '三', '四', '五', '六', '日'])
             Expanded(child: Center(child: Text(label, style: TextStyle(color: colors.onSurfaceVariant))))]),
           const SizedBox(height: 8),
-          GridView.builder(
-            shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-            itemCount: weeks * 7,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 7, mainAxisExtent: cellHeight, crossAxisSpacing: 4, mainAxisSpacing: 4),
-            itemBuilder: (context, index) => _day(DateTime(start.year, start.month, start.day + index), previewCount, taskHeight),
-          ),
+          for (var week = 0; week < weeks; week++) ...[
+            _week(start, week, cellHeight, headerHeight, taskHeight, detailsHeight),
+            if (week < weeks - 1) const SizedBox(height: 4),
+          ],
       ]),
       const SizedBox(height: 10),
-      Text('整月显示 · 勾选完成 · 按住空白拖动或滚动查看',
+      Text('待办全部展开 · 按住空白拖动或滚动查看',
         textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant)),
       const SizedBox(height: 6),
       Align(alignment: Alignment.centerLeft, child: FilterChip(
@@ -212,12 +205,29 @@ class _CalendarScreenState extends State<CalendarScreen> {
     ]);
   }
 
-  Widget _day(DateTime day, int previewCount, double taskHeight) {
+  Widget _week(DateTime start, int week, double baseHeight, double headerHeight,
+      double taskHeight, double detailsHeight) {
+    final days = List.generate(7, (index) => DateTime(start.year, start.month, start.day + week * 7 + index));
+    final mostTasks = days.map((day) => tasksOnDate(widget.controller.tasks, dateKey(day)).length)
+      .reduce(math.max);
+    // Grow the entire week to the busiest day. No task is hidden behind a
+    // preview cap; the existing outer scroll view keeps every week reachable.
+    final contentHeight = 8 + headerHeight + 4 + mostTasks * (taskHeight + 3)
+      + (mostTasks > 0 ? detailsHeight + 4 : 0);
+    return SizedBox(height: math.max(baseHeight, contentHeight), child: Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [for (var index = 0; index < days.length; index++) ...[
+        Expanded(child: _day(days[index], taskHeight, detailsHeight)),
+        if (index < days.length - 1) const SizedBox(width: 4),
+      ]],
+    ));
+  }
+
+  Widget _day(DateTime day, double taskHeight, double detailsHeight) {
     final colors = Theme.of(context).colorScheme;
     final key = dateKey(day);
     final tasks = tasksOnDate(widget.controller.tasks, key);
-    // Keep a completed entry in its preview slot so its strike-through remains
-    // visible instead of being moved under the overflow count.
+    // Completion leaves each task in the same place with its strike-through.
     tasks.sort((a, b) {
       final priority = b.priority.compareTo(a.priority);
       if (priority != 0) return priority;
@@ -251,12 +261,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   if (tasks.isNotEmpty && constraints.maxWidth >= 64) Text('$remaining/${tasks.length}', style: TextStyle(fontSize: 9, color: colors.primary)),
                 ]),
                 const SizedBox(height: 4),
-                for (final task in tasks.take(previewCount)) _calendarTask(task, taskHeight),
-                if (tasks.length > previewCount)
+                for (final task in tasks) _calendarTask(task, taskHeight),
+                if (tasks.isNotEmpty)
                   InkWell(key: ValueKey('more-$key'), onTap: () => _showDay(day),
-                    child: Padding(padding: const EdgeInsets.only(top: 3),
-                      child: Text('+${tasks.length - previewCount} 项', maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 10, color: colors.primary)))),
+                    child: SizedBox(height: detailsHeight, child: Align(alignment: Alignment.centerLeft,
+                      child: Text('详情', maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 10, color: colors.primary))))),
                 if (hovered && tasks.isEmpty) Expanded(child: Center(child: Icon(Icons.add_task_rounded, color: colors.primary))),
               ]))),
             ),
