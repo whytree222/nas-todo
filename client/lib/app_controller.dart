@@ -124,7 +124,9 @@ class AppController extends ChangeNotifier {
     if (_disposed || _savingAppearance) return false;
     if (_appearance.appTheme == appTheme &&
         _appearance.widgetTheme == widgetTheme &&
-        _appearanceError == null) return true;
+        _appearanceError == null) {
+      return true;
+    }
     _savingAppearance = true;
     _notify();
     try {
