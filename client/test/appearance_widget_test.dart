@@ -96,12 +96,16 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('日历'));
     await tester.pumpAndSettle();
-    final tomorrow = dateKey(DateTime.now().add(const Duration(days: 1)));
-    final day = find.byKey(ValueKey('day-$tomorrow'));
+    final now = DateTime.now();
+    final unselectedDate = DateTime(now.year, now.month, now.day == 15 ? 14 : 15);
+    final day = find.byKey(ValueKey('day-${dateKey(unselectedDate)}'));
     final cell = tester.widget<Material>(find.ancestor(of: day, matching: find.byType(Material)).first);
     expect(cell.color, dark.colorScheme.surface);
     final agenda = find.byType(AgendaTask);
-    await tester.ensureVisible(agenda);
+    await tester.scrollUntilVisible(agenda, 180,
+      scrollable: find.descendant(of: find.byType(CalendarScreen),
+        matching: find.byType(Scrollable)).first);
+    await tester.pumpAndSettle();
     final card = tester.widget<Card>(find.descendant(of: agenda, matching: find.byType(Card)).first);
     expect(card.color, dark.colorScheme.surface);
     expect(Theme.of(tester.element(find.byType(CalendarScreen))).brightness, Brightness.dark);
