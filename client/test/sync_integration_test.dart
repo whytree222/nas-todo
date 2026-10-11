@@ -284,6 +284,37 @@ void main() {
     expect(a.tasks.single.completed, isTrue); expect(b.conflicts, isEmpty);
   });
 
+  test('scheduling during a pull retains latest NAS content and synchronizes its new date', () async {
+    final a = await device('a'); final originalB = await device('b');
+    await a.saveTask(const TaskDraft(title: '未安排的旧内容')); await a.sync(); await originalB.sync();
+    final id = a.tasks.single.id;
+    await a.saveTask(const TaskDraft(title: 'NAS新内容', note: '最新备注', listName: '工作', priority: 2, completed: true), id: id);
+    await a.sync();
+    final http = HttpSyncTransport(nas.url, testToken); transports.add(http);
+    final gate = GateTransport(http); final b = await device('b', transport: gate);
+    final sync = b.sync(); await gate.entered.future;
+    final scheduling = b.scheduleTask(id, '2024-02-29'); gate.release.complete();
+    await sync; await scheduling; await b.sync(); await a.sync();
+    final task = a.tasks.single;
+    expect([task.id, task.title, task.note, task.listName, task.priority, task.completed, task.dueDate],
+      [id, 'NAS新内容', '最新备注', '工作', 2, true, '2024-02-29']);
+    expect(b.conflicts, isEmpty); expect(b.pendingCount, 0);
+  });
+
+  test('a date received during a pull cannot be overwritten by an outdated unscheduled drag', () async {
+    final a = await device('a'); final originalB = await device('b');
+    await a.saveTask(const TaskDraft(title: '未安排')); await a.sync(); await originalB.sync();
+    final id = a.tasks.single.id;
+    await a.saveTask(const TaskDraft(title: '已安排', dueDate: '2024-03-01'), id: id); await a.sync();
+    final http = HttpSyncTransport(nas.url, testToken); transports.add(http);
+    final gate = GateTransport(http); final b = await device('b', transport: gate);
+    final sync = b.sync(); await gate.entered.future;
+    final scheduling = b.scheduleTask(id, '2024-02-29');
+    final rejected = expectLater(scheduling, throwsA(isA<StateError>()));
+    gate.release.complete(); await sync; await rejected;
+    expect(b.tasks.single.dueDate, '2024-03-01'); expect(b.pendingCount, 0);
+  });
+
   test('more than 100 changes upload in durable bounded batches', () async {
     final a = await device('a');
     for (var i = 0; i < 105; i++) { await a.saveTask(TaskDraft(title: '任务$i')); }

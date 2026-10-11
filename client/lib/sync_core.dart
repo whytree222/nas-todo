@@ -234,6 +234,21 @@ class SyncEngine {
     ), id: id);
   });
 
+  Future<void> scheduleTask(String id, String date) => _serial(() async {
+    _checkLoaded();
+    final task = _tasks[id];
+    if (task == null || task.deleted) throw StateError('这条待办已删除');
+    if (_conflicts.containsKey(id)) throw StateError('请先处理这条待办的同步冲突');
+    if (task.dueDate == date) return;
+    if (task.dueDate != null) throw StateError('这条待办已有日期，请刷新后重试');
+    // Read inside the sync queue: dragging changes only the date, never content
+    // or completion freshly received from the NAS while the drag was underway.
+    await _saveDraft(TaskDraft(
+      title: task.title, note: task.note, listName: task.listName,
+      dueDate: date, priority: task.priority, completed: task.completed,
+    ), id: id);
+  });
+
   Future<void> _saveDraft(TaskDraft draft, {String? id}) async {
     _checkLoaded();
     draft.validate();

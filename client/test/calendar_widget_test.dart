@@ -8,6 +8,7 @@ import 'package:nas_todo/main.dart';
 import 'package:nas_todo/sync_core.dart';
 import 'package:nas_todo/task_dates.dart';
 import 'package:nas_todo/ui/calendar_screen.dart';
+import 'package:nas_todo/ui/agenda_task.dart';
 
 class _Store implements DataStore {
   Map<String, dynamic>? state;
@@ -134,7 +135,7 @@ void main() {
     await tester.tap(find.byKey(ValueKey('complete-$id')));
     await tester.pumpAndSettle();
     expect(controller.tasks.single.completed, isTrue);
-    final text = tester.widget<Text>(find.text('闰日安排'));
+    final text = tester.widget<Text>(find.byKey(ValueKey('calendar-title-$id')));
     expect(text.style?.decoration, TextDecoration.lineThrough);
     expect(find.text('0/1'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -157,10 +158,11 @@ void main() {
     await tester.tap(find.text('日历').last);
     await tester.pumpAndSettle();
     expect(tester.widget<FilterChip>(find.byType(FilterChip)).selected, isTrue);
-    await tester.scrollUntilVisible(find.text('未安排任务'), 180,
+    final agenda = find.descendant(of: find.byType(AgendaTask), matching: find.text('未安排任务'));
+    await tester.scrollUntilVisible(agenda, 180,
       scrollable: find.descendant(of: find.byType(CalendarScreen),
         matching: find.byType(Scrollable)).first);
-    expect(find.text('未安排任务'), findsOneWidget);
+    expect(agenda, findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -173,7 +175,10 @@ void main() {
     await tester.pumpAndSettle();
     final now = DateTime.now();
     final target = DateTime(now.year, now.month, 15);
-    await tester.tap(find.byKey(ValueKey('day-${dateKey(target)}')));
+    final day = find.byKey(ValueKey('day-${dateKey(target)}'));
+    await tester.ensureVisible(day);
+    await tester.pumpAndSettle();
+    await tester.tap(day);
     await tester.pumpAndSettle();
     await tester.tap(find.text('新建待办'));
     await tester.pumpAndSettle();

@@ -195,6 +195,10 @@ class AppController extends ChangeNotifier {
     return _edit(() => engine.setCompleted(id, completed));
   }
 
+  Future<bool> scheduleTask(String id, String date) async {
+    return _edit(() => engine.scheduleTask(id, date));
+  }
+
   Future<bool> deleteTask(String id) async {
     return _edit(() => engine.deleteTask(id));
   }

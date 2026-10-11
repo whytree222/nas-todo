@@ -99,6 +99,8 @@ void main() {
     final now = DateTime.now();
     final unselectedDate = DateTime(now.year, now.month, now.day == 15 ? 14 : 15);
     final day = find.byKey(ValueKey('day-${dateKey(unselectedDate)}'));
+    await tester.ensureVisible(day);
+    await tester.pumpAndSettle();
     final cell = tester.widget<Material>(find.ancestor(of: day, matching: find.byType(Material)).first);
     expect(cell.color, dark.colorScheme.surface);
     final agenda = find.byType(AgendaTask);
