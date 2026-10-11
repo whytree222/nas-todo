@@ -1,14 +1,14 @@
-# 私有仓库云端编译
+# 云端编译与公开发布
 
-运行 [38109357722](https://github.com/whytree222/nas-todo/actions/runs/38109357722) 的后端、安卓和 Windows 任务已全部成功，源提交 `a4eb69a8263cf9da2481dfd7b7f38f16b8aeae11`。已将其安装包发布到 [v0.5.0 私有测试版 Release](https://github.com/whytree222/nas-todo/releases/tag/v0.5.0)，登录自己的 GitHub 账号下载 APK 与 Windows 完整程序 ZIP，详见 [安装说明](RELEASE-v0.5.0.md)。Release 安装包不受 Actions 产物 14 天保留期影响。
+运行 [38121339641](https://github.com/whytree222/nas-todo/actions/runs/38121339641) 的后端、安卓和 Windows 任务全部成功，源提交 `9da1d2dbcc5b29b4ed3bf49d4210fc9b006edcf2`。安装包已发布到 [v0.6.0 公开测试版 Release](https://github.com/whytree222/nas-todo/releases/tag/v0.6.0)，使用方法见 [安装说明](RELEASE-v0.6.0.md)。Release 文件不受 Actions 产物 14 天保留期影响。
 
-源码通过自己的 GitHub 私有仓库交给 Actions 编译。部署密钥和 NAS 数据不需要提供给 GitHub，客户端安装后再填写。
+当前仓库按使用者授权保持公开，源码和安装包可以公开下载，使用 Actions 编译。部署密钥和 NAS 数据不需要提供给 GitHub，客户端安装后再填写。
 
 ## 仓库与上传
 
-1. 登录 GitHub，在自己的账号下创建 Private 仓库，名称建议 `nas-todo`。
+1. 当前使用 `whytree222/nas-todo` 公开仓库；自行部署时也可在自己的账号下创建专用仓库，名称建议 `nas-todo`。
 2. 勾选 Add a README file 初始化仓库，默认分支使用 main。
-3. 将仓库链接交给当前对话，以便继续上传源码、运行测试和处理构建错误。已有私有仓库也可以使用，但须确认是专用于此项目的仓库。
+3. 将仓库链接交给当前对话，以便继续上传源码、运行测试和处理构建错误。已有仓库也可以使用，建议专用于此项目。
 4. 工程根目录下的 `.github`、`client`、`server`、`docs` 等直接放在仓库根目录，不能再套一层 `nas-todo`。
 
 只上传 `nas-todo-source.zip` 中的源码。不上传 `nas-todo-deploy*.zip`、各版私有部署 Compose、NAS data 目录或同步密钥。
@@ -22,7 +22,7 @@
 - nas-todo-android-test-apk：解压得到 app-debug.apk，安装到安卓。
 - nas-todo-windows-full-release：解压整个文件夹，运行其中的 nas_todo.exe，保留旁边的 DLL 和 data 文件夹。
 
-Actions 产物保留 14 天，请下载保存或另行发布版本。publish.yml、publish-v02.yml、publish-v03.yml、publish-v04.yml 与 publish-v05.yml 分别固定已验证的 v0.1.0、v0.2.0、v0.3.0、v0.4.0、v0.5.0，不会把后续任意构建自动发布。当前 APK 使用测试签名；长期使用需固定自己的签名密钥，避免后续更新因签名变化而需要卸载应用。
+Actions 产物保留 14 天。publish.yml 与 publish-v02.yml 至 publish-v06.yml 分别固定已验证的对应版本；后续构建需单独验证再发布。当前 APK 使用测试签名，长期更新仍需固定自己的签名密钥。
 
 ## 首次同步验收
 
