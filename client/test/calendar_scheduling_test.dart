@@ -47,7 +47,7 @@ Future<void> _drop(WidgetTester tester, String id, {bool phone = false, bool can
   if (phone) await tester.pump(const Duration(milliseconds: 350));
   await gesture.moveBy(const Offset(0, -8));
   await tester.pump();
-  await gesture.moveTo(cancel ? const Offset(5, 5) : tester.getCenter(target));
+  await gesture.moveTo(cancel ? const Offset(-30, -30) : tester.getCenter(target));
   await tester.pump();
   await gesture.up();
   await tester.pumpAndSettle();
@@ -198,7 +198,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 550));
     expect(position.pixels, greaterThan(0));
     expect(tester.getRect(find.byKey(const ValueKey('unscheduled-tray'))), tray);
-    await gesture.moveTo(const Offset(5, 5));
+    await gesture.moveTo(const Offset(-30, -30));
     await gesture.up();
     await tester.pumpAndSettle();
     expect(controller.tasks.single.dueDate, isNull);
