@@ -72,10 +72,17 @@ def main():
         check({'AndroidManifest.xml', 'classes.dex'} <= names,
               'APK manifest or bytecode missing')
         check(any(n.endswith('/libflutter.so') for n in names), 'Flutter engine missing')
+        if tuple(map(int, VERSION.split('.'))) >= (0, 9, 0):
+            icons = 'assets/flutter_assets/fonts/MaterialIcons-Regular.otf'
+            check(icons in names and apk.getinfo(icons).file_size > 1000,
+                  'Material icon font missing from APK')
     windows = Path('release-input/windows')
     for name in ('nas_todo.exe', 'flutter_windows.dll', 'data/icudtl.dat'):
         check((windows / name).is_file(), f'Windows file missing: {name}')
     check((windows / 'data/flutter_assets').is_dir(), 'Flutter assets missing')
+    if tuple(map(int, VERSION.split('.'))) >= (0, 9, 0):
+        check((windows / 'data/flutter_assets/fonts/MaterialIcons-Regular.otf').is_file(),
+              'Material icon font missing from Windows package')
     if tuple(map(int, VERSION.split('.'))) >= (0, 3, 0):
         check((windows / 'desktop-widget.cmd').is_file(), 'Independent widget launcher missing')
     verify_pe(windows / 'nas_todo.exe')
