@@ -142,11 +142,15 @@ void main() {
     await _todayTask(controller);
     await tester.pumpWidget(PrivateTodoApp(controller: controller));
     await tester.pumpAndSettle();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     await controller.setCompleted(controller.tasks.single.id, true);
     await tester.pumpAndSettle();
     expect(find.byType(DailyCelebrationDialog), findsNothing);
     expect(controller.pendingDailyCelebration, isNotNull);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pumpAndSettle();
     expect(find.byType(DailyCelebrationDialog), findsOneWidget);
