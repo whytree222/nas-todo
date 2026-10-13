@@ -1,5 +1,6 @@
 """Publish a successful build with an explicitly selected repository visibility."""
 import hashlib
+import base64
 import json
 import os
 import re
@@ -97,6 +98,9 @@ def main():
     shutil.copyfile(NOTES, guide)
     assets = [apk_output, windows_output, guide]
     if tuple(map(int, VERSION.split('.'))) >= (0, 7, 0):
+        tested_source = api(f'repos/{repo}/contents/server/app.py?ref={BUILD_SHA}')
+        check(base64.b64decode(tested_source['content']) == Path('server/app.py').read_bytes(),
+              'Server upgrade code must match the tested source commit')
         server_output = dist / f'nas-todo-server-{TAG}.zip'
         with zipfile.ZipFile(server_output, 'w', zipfile.ZIP_DEFLATED) as archive:
             for name in ('server/app.py', 'server/Dockerfile', 'docs/UPGRADE-v0.7.0.md'):

@@ -164,4 +164,19 @@ void main() {
     expect(find.byKey(const ValueKey('achievement-upgrade-notice')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('Reading a historical month is not reset by the yearly refresh timer', (tester) async {
+    _size(tester, const Size(390, 844));
+    final engine = SyncEngine(_Store(), _Transport()..achievement = _snapshot());
+    await engine.load(); await engine.sync();
+    final controller = AppController.forTesting(engine); addTearDown(controller.dispose);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: AchievementsScreen(controller: controller,
+      clock: () => DateTime(2026, 12, 15)))));
+    await tester.pumpAndSettle();
+    final october = find.byKey(const ValueKey('achievement-month-2026-10'));
+    await tester.ensureVisible(october); await tester.tap(october); await tester.pumpAndSettle();
+    await tester.pump(const Duration(minutes: 1)); await tester.pumpAndSettle();
+    expect(find.text('10月 · 全周达标'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

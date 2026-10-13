@@ -114,7 +114,9 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
     return Material(key: ValueKey('achievement-month-$month'), color: color,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(
         color: month == _month ? colors.primary : Colors.transparent, width: 2)),
-      child: InkWell(borderRadius: BorderRadius.circular(12), onTap: () => setState(() => _month = month),
+      child: InkWell(borderRadius: BorderRadius.circular(12), onTap: () => setState(() {
+        _month = month; _followCurrent = month == achievementMonth(_today);
+      }),
         child: Padding(padding: const EdgeInsets.all(8), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Text('${int.parse(month.substring(5))}月', maxLines: 1, overflow: TextOverflow.ellipsis,
             style: TextStyle(fontWeight: FontWeight.w700, color: foreground)),
