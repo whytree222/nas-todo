@@ -6,18 +6,14 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
 import android.graphics.Paint
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.widget.RemoteViews
-import org.json.JSONObject
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import java.util.UUID
 
-class TodoWidgetProvider : AppWidgetProvider() {
+open class TodoWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
         ids.forEach { update(context, manager, it) }
     }
@@ -28,110 +24,131 @@ class TodoWidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         if (intent.action in listOf(Intent.ACTION_DATE_CHANGED, Intent.ACTION_TIME_CHANGED,
-                Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_MY_PACKAGE_REPLACED)) updateAll(context)
+                Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_MY_PACKAGE_REPLACED)) {
+            val manager = AppWidgetManager.getInstance(context)
+            manager.getAppWidgetIds(ComponentName(context, javaClass)).forEach { update(context, manager, it) }
+        }
     }
 
     companion object {
         const val PREFS = "todo_widget"
         const val COMPLETE = "cn.privatetodo.app.WIDGET_COMPLETE"
 
-        private data class Palette(val background: Int, val text: Int,
-            val muted: Int, val accent: Int, val completed: Int, val conflict: Int)
-
-        // The persisted snapshot is the only theme source for the widget host.
-        // Unknown or older snapshot values keep the original green appearance.
-        private fun palette(theme: String): Palette = when (theme) {
-            "black" -> Palette(R.drawable.widget_background_black,
-                Color.parseColor("#F2F4F6"), Color.parseColor("#B1BCC7"),
-                Color.parseColor("#DDE5ED"), Color.parseColor("#89949F"),
-                Color.parseColor("#FFBE86"))
-            "white" -> Palette(R.drawable.widget_background_white,
-                Color.parseColor("#26303B"), Color.parseColor("#626F7D"),
-                Color.parseColor("#495B6C"), Color.parseColor("#798490"),
-                Color.parseColor("#A3471B"))
-            "blue" -> Palette(R.drawable.widget_background_blue,
-                Color.parseColor("#203E60"), Color.parseColor("#52718E"),
-                Color.parseColor("#2568A6"), Color.parseColor("#6A8198"),
-                Color.parseColor("#A3471B"))
-            else -> Palette(R.drawable.widget_background,
-                Color.parseColor("#244C3E"), Color.parseColor("#547565"),
-                Color.parseColor("#326B58"), Color.parseColor("#71857A"),
-                Color.parseColor("#A3471B"))
-        }
+        private val providers = listOf(TodoWidgetProvider::class.java, TodoAllWidgetProvider::class.java,
+            TodoWeekWidgetProvider::class.java, TodoCompactWidgetProvider::class.java, TodoCardsWidgetProvider::class.java)
 
         fun updateAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
-            manager.getAppWidgetIds(ComponentName(context, TodoWidgetProvider::class.java))
-                .forEach { update(context, manager, it) }
+            providers.forEach { provider ->
+                manager.getAppWidgetIds(ComponentName(context, provider)).forEach { update(context, manager, it) }
+            }
         }
 
-        private fun launch(context: Context, uri: String, id: String? = null,
-            completed: Boolean = false): PendingIntent {
+        fun modeFor(provider: String?): Int = when (provider) {
+            TodoAllWidgetProvider::class.java.name -> WidgetData.ALL
+            TodoWeekWidgetProvider::class.java.name -> WidgetData.WEEK
+            TodoCompactWidgetProvider::class.java.name -> WidgetData.COMPACT
+            TodoCardsWidgetProvider::class.java.name -> WidgetData.CARDS
+            else -> WidgetData.TODAY
+        }
+
+        private fun launch(context: Context, id: Int, collection: Boolean): PendingIntent {
             val intent = Intent(context, MainActivity::class.java)
-                .setData(Uri.parse(uri))
+                .setData(Uri.parse("privatetodo://widget/${if (collection) "collection" else "open"}/$id"))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            if (id != null) {
+            if (collection) {
                 val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 val auth = prefs.getString("widget_auth", null) ?: UUID.randomUUID().toString().also {
                     prefs.edit().putString("widget_auth", it).commit()
                 }
-                intent.setAction(COMPLETE).putExtra("task_id", id).putExtra("completed", completed)
-                    .putExtra("widget_auth", auth)
+                intent.setAction(COMPLETE).putExtra("widget_auth", auth)
             }
-            return PendingIntent.getActivity(context, 0, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            val mutable = if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0
+            return PendingIntent.getActivity(context, id, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or if (collection) mutable else PendingIntent.FLAG_IMMUTABLE)
         }
 
+        @Suppress("DEPRECATION")
         private fun update(context: Context, manager: AppWidgetManager, id: Int) {
-            val today = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
-            val snapshot = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("snapshot", null)
-            val state = try { JSONObject(snapshot ?: "{\"tasks\":[]}") }
-                catch (_: Exception) { JSONObject() }
-            val colors = palette(state.optString("theme", "green"))
-            val array = state.optJSONArray("tasks")
-            val tasks = (0 until (array?.length() ?: 0)).mapNotNull { array?.optJSONObject(it) }
-                .filter { it.optString("due_date") == today }
-                .sortedWith(compareBy<JSONObject> { it.optBoolean("completed") }
-                    .thenByDescending { it.optInt("priority") }.thenBy { it.optString("title") })
-            val views = RemoteViews(context.packageName, R.layout.todo_widget)
+            val mode = modeFor(manager.getAppWidgetInfo(id)?.provider?.className)
+            manager.updateAppWidget(id, render(context, id, mode))
+            manager.notifyAppWidgetViewDataChanged(id, R.id.widget_tasks)
+        }
+
+        @Suppress("DEPRECATION")
+        fun render(context: Context, id: Int, mode: Int): RemoteViews {
+            val state = WidgetData.read(context)
+            val today = WidgetData.today()
+            val tasks = WidgetData.tasks(state, mode, today)
+            val colors = WidgetData.palette(state.optString("theme", "green"))
+            val compact = mode == WidgetData.COMPACT
+            val views = RemoteViews(context.packageName, when (mode) {
+                WidgetData.COMPACT -> R.layout.todo_widget_compact
+                WidgetData.CARDS -> R.layout.todo_widget_cards
+                else -> R.layout.todo_widget
+            })
             views.setInt(R.id.widget_root, "setBackgroundResource", colors.background)
             views.setTextColor(R.id.widget_title, colors.text)
             views.setTextColor(R.id.widget_summary, colors.muted)
             views.setTextColor(R.id.widget_empty, colors.muted)
             views.setTextColor(R.id.widget_open, colors.accent)
-            views.setTextViewText(R.id.widget_title, "今天 · ${today.substring(5).replace('-', '月')}日")
-            val remaining = tasks.count { !it.optBoolean("completed") }
-            views.setTextViewText(R.id.widget_summary, "$remaining 项未完成 / ${tasks.size} 项 · 点勾选打开应用保存")
-            views.setOnClickPendingIntent(R.id.widget_title, launch(context, "privatetodo://widget/open"))
-            views.setOnClickPendingIntent(R.id.widget_open, launch(context, "privatetodo://widget/open"))
-            views.removeAllViews(R.id.widget_tasks)
-            val height = manager.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 250)
-            val visibleCount = ((height - 140) / 44).coerceIn(1, 8)
-            for (task in tasks.take(visibleCount)) {
-                val row = RemoteViews(context.packageName, R.layout.todo_widget_row)
-                val done = task.optBoolean("completed")
-                val conflict = task.optBoolean("conflict")
-                val taskId = task.getString("id")
-                row.setTextViewText(R.id.widget_check, if (conflict) "!" else if (done) "☑" else "☐")
-                row.setTextViewText(R.id.widget_task_title, task.getString("title"))
-                row.setTextColor(R.id.widget_check, if (conflict) colors.conflict
-                    else if (done) colors.completed else colors.accent)
-                row.setTextColor(R.id.widget_task_title, if (done) colors.completed else colors.text)
-                row.setInt(R.id.widget_task_title, "setPaintFlags", Paint.ANTI_ALIAS_FLAG or
-                    if (done) Paint.STRIKE_THRU_TEXT_FLAG else 0)
-                row.setOnClickPendingIntent(R.id.widget_task_title, launch(context, "privatetodo://widget/open/$taskId"))
-                row.setOnClickPendingIntent(R.id.widget_check, if (conflict)
-                    launch(context, "privatetodo://widget/conflict/$taskId") else
-                    launch(context, "privatetodo://widget/complete/$taskId/${!done}", taskId, !done))
-                views.addView(R.id.widget_tasks, row)
-            }
-            views.setTextViewText(R.id.widget_empty, when {
-                snapshot == null -> "先打开应用，设置待办日期后会显示在这里"
-                tasks.isEmpty() -> "今天没有安排待办"
-                tasks.size > visibleCount -> "还有 ${tasks.size - visibleCount} 项，打开应用查看"
-                else -> ""
+            views.setTextViewText(R.id.widget_title, when (mode) {
+                WidgetData.ALL -> "全部待办"
+                WidgetData.WEEK -> "未来七天"
+                WidgetData.CARDS -> "待办卡片"
+                else -> "今天 · ${today.substring(5).replace('-', '月')}日"
             })
-            manager.updateAppWidget(id, views)
+            val remaining = tasks.count { !it.optBoolean("completed") }
+            views.setTextViewText(R.id.widget_summary, "$remaining 项未完成 · ${tasks.size} 项 · 上下滑动")
+            views.setOnClickPendingIntent(R.id.widget_open, launch(context, id, false))
+            val adapter = Intent(context, TodoWidgetService::class.java)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).putExtra("widget_mode", mode)
+                .setData(Uri.parse("privatetodo://widget/list/$id/$mode"))
+            views.setRemoteAdapter(R.id.widget_tasks, adapter)
+            views.setPendingIntentTemplate(R.id.widget_tasks, launch(context, id, true))
+            views.setEmptyView(R.id.widget_tasks, R.id.widget_empty)
+            views.setTextViewText(R.id.widget_empty, if (!state.has("tasks")) "先打开应用同步待办" else when (mode) {
+                WidgetData.ALL, WidgetData.CARDS -> "没有待办"
+                WidgetData.WEEK -> "未来七天没有安排"
+                else -> "今天没有安排"
+            })
+            return views
+        }
+
+        fun row(context: Context, task: org.json.JSONObject, theme: String, mode: Int): RemoteViews {
+            val colors = WidgetData.palette(theme)
+            val compact = mode == WidgetData.COMPACT
+            val row = RemoteViews(context.packageName, when (mode) {
+                WidgetData.COMPACT -> R.layout.todo_widget_row_compact
+                WidgetData.CARDS -> R.layout.todo_widget_card
+                else -> R.layout.todo_widget_row
+            })
+            val done = task.optBoolean("completed")
+            val conflict = task.optBoolean("conflict")
+            row.setTextViewText(R.id.widget_check, if (conflict) "!" else if (done) "✓" else "○")
+            row.setTextViewText(R.id.widget_task_title, task.optString("title"))
+            row.setTextColor(R.id.widget_check, if (conflict) colors.conflict else if (done) colors.completed else colors.accent)
+            row.setTextColor(R.id.widget_task_title, if (done) colors.completed else colors.text)
+            row.setInt(R.id.widget_task_title, "setPaintFlags", Paint.ANTI_ALIAS_FLAG or
+                if (done) Paint.STRIKE_THRU_TEXT_FLAG else 0)
+            if (!compact) {
+                val due = task.optString("due_date")
+                row.setTextViewText(R.id.widget_task_date, if (due.length != 10) "未安排" else due.substring(5).replace('-', '/'))
+                row.setTextColor(R.id.widget_task_date, colors.muted)
+                row.setViewVisibility(R.id.widget_task_date,
+                    if (mode == WidgetData.TODAY) android.view.View.GONE else android.view.View.VISIBLE)
+            }
+            // Only the explicit completion control launches the editor. Browsing
+            // and swiping titles does not have an activity PendingIntent.
+            row.setOnClickFillInIntent(R.id.widget_check, Intent()
+                .putExtra("task_id", task.optString("id"))
+                .putExtra("completed", !done).putExtra("widget_open_only", conflict))
+            return row
         }
     }
 }
+
+class TodoAllWidgetProvider : TodoWidgetProvider()
+class TodoWeekWidgetProvider : TodoWidgetProvider()
+class TodoCompactWidgetProvider : TodoWidgetProvider()
+class TodoCardsWidgetProvider : TodoWidgetProvider()

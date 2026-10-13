@@ -67,6 +67,7 @@ class MainActivity : FlutterActivity() {
 
     private fun acceptWidgetAction(intent: Intent) {
         if (intent.action != TodoWidgetProvider.COMPLETE) return
+        if (intent.getBooleanExtra("widget_open_only", false)) return
         val taskId = intent.getStringExtra("task_id") ?: return
         val prefs = getSharedPreferences(TodoWidgetProvider.PREFS, MODE_PRIVATE)
         val auth = prefs.getString("widget_auth", null) ?: return
