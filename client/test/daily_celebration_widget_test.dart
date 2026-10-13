@@ -84,12 +84,22 @@ Future<void> _preview(WidgetTester tester, String fileName) async {
 }
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  final binding = TestWidgetsFlutterBinding.ensureInitialized();
   const desktopChannel = MethodChannel('cn.privatetodo/desktop');
   final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   var mainVisible = true;
   setUp(() {
     mainVisible = true;
+    // Start each simulated main app active on both headless host platforms.
+    if (binding.lifecycleState == AppLifecycleState.paused) {
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    }
+    if (binding.lifecycleState == AppLifecycleState.hidden) {
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    }
+    if (binding.lifecycleState != AppLifecycleState.resumed) {
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    }
     // Native plugin replies otherwise require platform event delivery outside
     // the widget tester's fake clock on Windows. Model the real visibility API.
     messenger.setMockMethodCallHandler(desktopChannel, (call) async {
