@@ -42,6 +42,7 @@ class AppController extends ChangeNotifier {
   Future<void>? _loadingCelebration;
   bool _celebrationReadable = true;
   bool _claimingCelebration = false;
+  Future<void> _celebrationWriteTail = Future<void>.value();
   AppearancePreferences _appearance = const AppearancePreferences();
   bool _savingAppearance = false;
   String? _appearanceError;
@@ -240,15 +241,25 @@ class AppController extends ChangeNotifier {
     'pending': pending?.toJson(),
   };
 
+  Future<void> _writeCelebration(DailyCelebration? pending) {
+    final state = _celebrationState(pending);
+    final write = _celebrationWriteTail.then((_) => _celebrationStore.write(state));
+    // A failed preference flush must not poison later independent daily writes.
+    _celebrationWriteTail = write.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    return write;
+  }
+
   Future<void> _queueCelebration(DailyCelebration celebration) async {
     await _loadCelebration();
     if (_disposed || !_celebrationReadable ||
-        _celebratedDays.contains(celebration.day)) return;
+        _celebratedDays.contains(celebration.day)) {
+      return;
+    }
     // Keep the in-memory marker on failure as well: completing tasks still works,
     // and undo/recomplete cannot repeatedly retry a broken preference disk.
     _celebratedDays.add(celebration.day);
     try {
-      await _celebrationStore.write(_celebrationState(celebration));
+      await _writeCelebration(celebration);
       if (!_disposed) _pendingCelebration = celebration;
     } catch (_) {
       // Task completion was already durably saved; don't report it as failed.
@@ -263,8 +274,8 @@ class AppController extends ChangeNotifier {
     _claimingCelebration = true;
     final pending = _pendingCelebration!;
     try {
-      await _celebrationStore.write(_celebrationState(null));
-      _pendingCelebration = null;
+      await _writeCelebration(null);
+      if (identical(_pendingCelebration, pending)) _pendingCelebration = null;
       // Another user action or midnight may occur while the preference flushes.
       final today = dateKey(_clock());
       final scheduled = tasks.where((task) => !task.deleted && task.dueDate == today).toList();
@@ -274,7 +285,7 @@ class AppController extends ChangeNotifier {
           ? DailyCelebration(day: pending.day, taskCount: scheduled.length) : null;
     } catch (_) {
       // Retry only on a future launch, never spin on every controller rebuild.
-      _pendingCelebration = null;
+      if (identical(_pendingCelebration, pending)) _pendingCelebration = null;
       return null;
     } finally {
       _claimingCelebration = false;

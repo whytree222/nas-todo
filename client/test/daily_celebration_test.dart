@@ -244,6 +244,29 @@ void main() {
     expect(controller.pendingDailyCelebration, isNull);
   });
 
+  test('Old pending clear and next-day completion serialize preference writes without losing the new card', () async {
+    final preferences = _Preferences();
+    var now = DateTime(2026, 10, 13, 23, 59);
+    final controller = await _controller(_TaskStore(), preferences: preferences, clock: () => now);
+    await controller.saveTask(const TaskDraft(title: 'Today', dueDate: '2026-10-13'));
+    await controller.saveTask(const TaskDraft(title: 'Tomorrow', dueDate: '2026-10-14'));
+    await controller.setCompleted(controller.tasks.first.id, true);
+    preferences.gate = Completer<void>();
+    final takingOldCard = controller.takeDailyCelebration();
+    await Future<void>.delayed(Duration.zero);
+    expect(preferences.writes, 2);
+    now = DateTime(2026, 10, 14);
+    final completingTomorrow = controller.setCompleted(controller.tasks.last.id, true);
+    await Future<void>.delayed(Duration.zero);
+    // The new write waits behind the old clear, rather than touching the same tmp.
+    expect(preferences.writes, 2);
+    preferences.gate!.complete();
+    expect(await takingOldCard, isNull);
+    expect(await completingTomorrow, isTrue);
+    expect(controller.pendingDailyCelebration?.day, '2026-10-14');
+    expect((await preferences.read())?['pending'], {'day': '2026-10-14', 'task_count': 1});
+  });
+
   test('Disposal during a daily marker write does not publish an event or notify dead listeners', () async {
     final preferences = _Preferences();
     final controller = await _controller(_TaskStore(), preferences: preferences, disposeAutomatically: false);

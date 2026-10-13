@@ -157,9 +157,11 @@ void main() {
     _size(tester, const Size(360, 640));
     final font = await _previewFont(tester);
     var theme = buildTodoTheme(TodoThemeColor.green);
-    if (font != null) theme = theme.copyWith(
-      textTheme: theme.textTheme.apply(fontFamily: font),
-      primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: font));
+    if (font != null) {
+      theme = theme.copyWith(
+        textTheme: theme.textTheme.apply(fontFamily: font),
+        primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: font));
+    }
     await tester.pumpWidget(MaterialApp(theme: theme, home: Builder(builder: (context) =>
       Scaffold(body: Center(child: FilledButton(onPressed: () => showDailyCelebration(context,
         const DailyCelebration(day: '2026-10-13', taskCount: 8)), child: const Text('Open preview')))))));
@@ -178,9 +180,11 @@ void main() {
     _size(tester, const Size(1280, 800));
     final font = await _previewFont(tester);
     var theme = buildTodoTheme(TodoThemeColor.black);
-    if (font != null) theme = theme.copyWith(
-      textTheme: theme.textTheme.apply(fontFamily: font),
-      primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: font));
+    if (font != null) {
+      theme = theme.copyWith(
+        textTheme: theme.textTheme.apply(fontFamily: font),
+        primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: font));
+    }
     await tester.pumpWidget(MaterialApp(theme: theme,
       builder: (_, child) => MediaQuery(
         data: MediaQueryData(size: const Size(1280, 800), textScaler: TextScaler.linear(1.6), disableAnimations: true),

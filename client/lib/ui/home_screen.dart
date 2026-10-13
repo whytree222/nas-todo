@@ -79,7 +79,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
 
   void _scheduleCelebration() {
     if (!mounted || _celebrationScheduled || _celebrationShowing ||
-        widget.controller.pendingDailyCelebration == null) return;
+        widget.controller.pendingDailyCelebration == null) {
+      return;
+    }
     _celebrationScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _celebrationScheduled = false;
@@ -87,10 +89,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
       final lifecycle = WidgetsBinding.instance.lifecycleState;
       if (lifecycle != null && lifecycle != AppLifecycleState.resumed) return;
       if (ModalRoute.of(context)?.isCurrent != true) return;
+      final pendingAtStart = widget.controller.pendingDailyCelebration;
       _celebrationShowing = true;
       try {
         if (!await DesktopWindow.isMainVisible() || !mounted ||
-            ModalRoute.of(context)?.isCurrent != true) return;
+            ModalRoute.of(context)?.isCurrent != true) {
+          return;
+        }
         final celebration = await widget.controller.takeDailyCelebration();
         if (celebration != null && mounted && ModalRoute.of(context)?.isCurrent == true &&
             (WidgetsBinding.instance.lifecycleState == null ||
@@ -99,6 +104,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ro
         }
       } finally {
         _celebrationShowing = false;
+        // A new day may complete while an older claim or dialog is finishing.
+        // Retry only a different event, never loop on the same hidden card.
+        if (mounted && !identical(widget.controller.pendingDailyCelebration, pendingAtStart)) {
+          _scheduleCelebration();
+        }
       }
     });
   }
