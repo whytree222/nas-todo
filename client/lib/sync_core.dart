@@ -143,6 +143,14 @@ Map<String, dynamic> _map(Object? value) => Map<String, dynamic>.from(value as M
 
 /// Personal offline-first sync. Writes and syncs are serialized so an in-flight
 /// acknowledgement cannot erase a concurrent local edit. Conflicts are durable.
+/// The before state is read inside the sync queue, and tasks follow durable save.
+class TaskCompletionChange {
+  TaskCompletionChange({required this.before, required List<Task> tasks})
+      : tasks = List.unmodifiable(tasks);
+  final Task before;
+  final List<Task> tasks;
+}
+
 class SyncEngine {
   final DataStore store;
   final SyncTransport transport;
@@ -230,7 +238,7 @@ class SyncEngine {
 
   Future<void> saveTask(TaskDraft draft, {String? id}) => _serial(() => _saveDraft(draft, id: id));
 
-  Future<void> setCompleted(String id, bool completed) => _serial(() async {
+  Future<TaskCompletionChange> setCompleted(String id, bool completed) => _serial(() async {
     _checkLoaded();
     final task = _tasks[id];
     if (task == null || task.deleted) throw StateError('这条待办已删除');
@@ -240,6 +248,7 @@ class SyncEngine {
       title: task.title, note: task.note, listName: task.listName,
       dueDate: task.dueDate, priority: task.priority, completed: completed,
     ), id: id);
+    return TaskCompletionChange(before: task, tasks: tasks);
   });
 
   Future<void> scheduleTask(String id, String date) => _serial(() async {

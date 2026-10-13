@@ -44,6 +44,10 @@ class DesktopWidgetBridge {
   }
 
   Future<dynamic> handleCall(MethodCall call) async {
+    if (call.method == 'mainWindowShown') {
+      controller.onResume();
+      return null;
+    }
     if (call.method == 'widgetComplete') {
       if (call.arguments is! Map) return false;
       final args = Map<String, dynamic>.from(call.arguments as Map);

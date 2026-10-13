@@ -17,6 +17,7 @@ object WidgetData {
     const val CARDS = 4
     data class Palette(val background: Int, val text: Int, val muted: Int,
         val accent: Int, val completed: Int, val conflict: Int)
+    data class PriorityStyle(val label: String, val text: Int, val background: Int)
 
     fun today(): String = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
 
@@ -55,6 +56,18 @@ object WidgetData {
         (uuid.mostSignificantBits xor uuid.leastSignificantBits).let { if (it == -1L) 0L else it }
     } catch (_: IllegalArgumentException) {
         id.fold(1125899906842597L) { hash, char -> 31 * hash + char.code }
+    }
+
+    fun priority(priority: Int, theme: String): PriorityStyle {
+        val dark = theme == "black"
+        return when (priority) {
+            2 -> PriorityStyle("紧急", Color.parseColor(if (dark) "#FFB5BB" else "#B32634"),
+                if (dark) R.drawable.widget_priority_urgent_dark else R.drawable.widget_priority_urgent)
+            1 -> PriorityStyle("较高", Color.parseColor(if (dark) "#FFD889" else "#855300"),
+                if (dark) R.drawable.widget_priority_high_dark else R.drawable.widget_priority_high)
+            else -> PriorityStyle("普通", Color.parseColor(if (dark) "#ABD0FF" else "#1E5EA8"),
+                if (dark) R.drawable.widget_priority_normal_dark else R.drawable.widget_priority_normal)
+        }
     }
 
     fun palette(theme: String): Palette = when (theme) {

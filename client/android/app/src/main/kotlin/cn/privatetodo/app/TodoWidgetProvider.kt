@@ -118,19 +118,27 @@ open class TodoWidgetProvider : AppWidgetProvider() {
         fun row(context: Context, task: org.json.JSONObject, theme: String, mode: Int): RemoteViews {
             val colors = WidgetData.palette(theme)
             val compact = mode == WidgetData.COMPACT
+            // Fresh row layouts make launcher caches inflate the new badge views after an upgrade.
             val row = RemoteViews(context.packageName, when (mode) {
-                WidgetData.COMPACT -> R.layout.todo_widget_row_compact
-                WidgetData.CARDS -> R.layout.todo_widget_card
-                else -> R.layout.todo_widget_row
+                WidgetData.COMPACT -> R.layout.todo_widget_priority_row_compact
+                WidgetData.CARDS -> R.layout.todo_widget_priority_card
+                else -> R.layout.todo_widget_priority_row
             })
             val done = task.optBoolean("completed")
             val conflict = task.optBoolean("conflict")
             row.setTextViewText(R.id.widget_check, if (conflict) "!" else if (done) "✓" else "○")
+            row.setContentDescription(R.id.widget_check, if (conflict) "待办存在冲突，打开应用处理"
+                else if (done) "取消完成，打开应用保存" else "标记完成，打开应用保存")
             row.setTextViewText(R.id.widget_task_title, task.optString("title"))
             row.setTextColor(R.id.widget_check, if (conflict) colors.conflict else if (done) colors.completed else colors.accent)
             row.setTextColor(R.id.widget_task_title, if (done) colors.completed else colors.text)
             row.setInt(R.id.widget_task_title, "setPaintFlags", Paint.ANTI_ALIAS_FLAG or
                 if (done) Paint.STRIKE_THRU_TEXT_FLAG else 0)
+            val priority = WidgetData.priority(task.optInt("priority"), theme)
+            row.setTextViewText(R.id.widget_task_priority, "● ${priority.label}")
+            row.setTextColor(R.id.widget_task_priority, priority.text)
+            row.setInt(R.id.widget_task_priority, "setBackgroundResource", priority.background)
+            row.setContentDescription(R.id.widget_task_priority, "紧急程度：${priority.label}")
             if (!compact) {
                 val due = task.optString("due_date")
                 row.setTextViewText(R.id.widget_task_date, if (due.length != 10) "未安排" else due.substring(5).replace('-', '/'))

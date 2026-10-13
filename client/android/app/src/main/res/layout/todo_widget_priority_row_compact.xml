@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent"
+    android:layout_height="wrap_content" android:minHeight="48dp" android:orientation="horizontal" android:gravity="center_vertical"
+    android:paddingTop="3dp" android:paddingBottom="3dp">
+    <TextView android:id="@+id/widget_check" android:layout_width="28dp" android:layout_height="40dp" android:gravity="center"
+        android:textSize="20sp" android:textColor="#326B58" android:contentDescription="勾选待办，打开应用保存"/>
+    <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:orientation="vertical">
+        <TextView android:id="@+id/widget_task_title" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textSize="12sp" android:textColor="#244C3E" android:maxLines="2" android:ellipsize="end"/>
+        <TextView android:id="@+id/widget_task_priority" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="2dp" android:paddingLeft="5dp" android:paddingRight="5dp" android:paddingTop="1dp" android:paddingBottom="1dp"
+            android:textSize="9sp" android:maxLines="1" android:background="@drawable/widget_priority_normal" android:textColor="#1E5EA8"/>
+    </LinearLayout>
+</LinearLayout>

@@ -8,6 +8,7 @@ import 'android_widget.dart';
 import 'desktop_widget_bridge.dart';
 import 'theme.dart';
 import 'ui/home_screen.dart';
+import 'ui/daily_celebration_dialog.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -103,6 +104,7 @@ class PrivateTodoApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       theme: buildTodoTheme(controller.appTheme),
+      navigatorObservers: [dailyCelebrationRouteObserver],
       builder: (context, child) {
         final theme = Theme.of(context);
         final dark = theme.brightness == Brightness.dark;

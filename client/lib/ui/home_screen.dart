@@ -7,6 +7,7 @@ import '../task_dates.dart';
 import 'calendar_screen.dart';
 import 'achievements_screen.dart';
 import 'conflict_dialog.dart';
+import 'daily_celebration_dialog.dart';
 import 'settings_screen.dart';
 import 'task_editor.dart';
 
@@ -18,11 +19,14 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, RouteAware {
   final _search = TextEditingController();
   int _page = 0;
   String? _selectedList;
   String _sort = 'due';
+  bool _celebrationScheduled = false;
+  bool _celebrationShowing = false;
+  ModalRoute<dynamic>? _observedRoute;
   static const _titles = ['全部待办', '今天', '已完成', '日历', '连接设置', '成就'];
   DateTime? _calendarDate = DateTime.now();
   Future<void> _openWidget() async {
@@ -44,18 +48,76 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    widget.controller.addListener(_scheduleCelebration);
+    _scheduleCelebration();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != _observedRoute) {
+      dailyCelebrationRouteObserver.unsubscribe(this);
+      _observedRoute = route;
+      if (route != null) dailyCelebrationRouteObserver.subscribe(this, route);
+    }
+    _scheduleCelebration();
+  }
+
+  @override
+  void didPopNext() => _scheduleCelebration();
+
+  @override
+  void didUpdateWidget(HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_scheduleCelebration);
+      widget.controller.addListener(_scheduleCelebration);
+      _scheduleCelebration();
+    }
+  }
+
+  void _scheduleCelebration() {
+    if (!mounted || _celebrationScheduled || _celebrationShowing ||
+        widget.controller.pendingDailyCelebration == null) return;
+    _celebrationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      _celebrationScheduled = false;
+      if (!mounted || _celebrationShowing || widget.controller.editing) return;
+      final lifecycle = WidgetsBinding.instance.lifecycleState;
+      if (lifecycle != null && lifecycle != AppLifecycleState.resumed) return;
+      if (ModalRoute.of(context)?.isCurrent != true) return;
+      _celebrationShowing = true;
+      try {
+        if (!await DesktopWindow.isMainVisible() || !mounted ||
+            ModalRoute.of(context)?.isCurrent != true) return;
+        final celebration = await widget.controller.takeDailyCelebration();
+        if (celebration != null && mounted && ModalRoute.of(context)?.isCurrent == true &&
+            (WidgetsBinding.instance.lifecycleState == null ||
+                WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed)) {
+          await showDailyCelebration(context, celebration);
+        }
+      } finally {
+        _celebrationShowing = false;
+      }
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    widget.controller.removeListener(_scheduleCelebration);
+    dailyCelebrationRouteObserver.unsubscribe(this);
     _search.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) widget.controller.onResume();
+    if (state == AppLifecycleState.resumed) {
+      widget.controller.onResume();
+      _scheduleCelebration();
+    }
   }
 
   void _selectPage(int index) {

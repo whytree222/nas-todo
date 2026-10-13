@@ -9,6 +9,7 @@ FlutterWindow::~FlutterWindow() {}
 void FlutterWindow::ShowMain() {
   ShowWindow(GetHandle(), SW_RESTORE);
   SetForegroundWindow(GetHandle());
+  if (desktop_channel_) desktop_channel_->InvokeMethod("mainWindowShown", nullptr);
 }
 bool FlutterWindow::OpenWidget() {
   if (widget_ && widget_->IsOpen()) { widget_->Reveal(); return true; }
@@ -40,7 +41,10 @@ bool FlutterWindow::OnCreate() {
   desktop_channel_->SetMethodCallHandler(
       [this](const flutter::MethodCall<flutter::EncodableValue>& call,
              std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
-        if (call.method_name() == "openWidget") {
+        if (call.method_name() == "isMainVisible") {
+          result->Success(flutter::EncodableValue(
+              IsWindowVisible(GetHandle()) && !IsIconic(GetHandle())));
+        } else if (call.method_name() == "openWidget") {
           if (OpenWidget()) result->Success();
           else result->Error("widget_unavailable", "Unable to create desktop widget");
         } else if (call.method_name() == "publishWidget") {
@@ -58,7 +62,7 @@ bool FlutterWindow::OnCreate() {
         } else result->NotImplemented();
       });
   flutter_controller_->engine()->SetNextFrameCallback([this] {
-    if (!widget_only_ || !widget_ || !widget_->IsOpen()) Show();
+    if (!widget_only_ || !widget_ || !widget_->IsOpen()) ShowMain();
     if (host_self_test_) PostMessage(GetHandle(), kHostTestStart, 0, 0);
   });
   flutter_controller_->ForceRedraw();
