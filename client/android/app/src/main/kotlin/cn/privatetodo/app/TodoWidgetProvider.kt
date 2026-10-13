@@ -85,7 +85,7 @@ open class TodoWidgetProvider : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, when (mode) {
                 WidgetData.COMPACT -> R.layout.todo_widget_compact
                 WidgetData.CARDS -> R.layout.todo_widget_cards
-                else -> R.layout.todo_widget
+                else -> R.layout.todo_widget_list
             })
             views.setInt(R.id.widget_root, "setBackgroundResource", colors.background)
             views.setTextColor(R.id.widget_title, colors.text)

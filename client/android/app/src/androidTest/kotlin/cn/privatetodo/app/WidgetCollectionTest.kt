@@ -126,7 +126,7 @@ class WidgetCollectionTest {
         assertEquals("android.permission.BIND_REMOTEVIEWS", service.permission)
         assertFalse(service.exported)
         instrumentation.runOnMainSync {
-            for (layout in listOf(R.layout.todo_widget, R.layout.todo_widget_compact)) {
+            for (layout in listOf(R.layout.todo_widget_list, R.layout.todo_widget_compact)) {
                 val view = RemoteViews(context.packageName, layout).apply(context, FrameLayout(context))
                 assertTrue(view.findViewById<View>(R.id.widget_tasks) is ListView)
             }
@@ -143,7 +143,7 @@ class WidgetCollectionTest {
         val factory = TodoWidgetFactory(context, WidgetData.TODAY).also { it.onCreate() }
         lateinit var list: ListView
         instrumentation.runOnMainSync {
-            val view = RemoteViews(context.packageName, R.layout.todo_widget).apply(context, activity.root)
+            val view = RemoteViews(context.packageName, R.layout.todo_widget_list).apply(context, activity.root)
             activity.root.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 (220 * context.resources.displayMetrics.density).toInt()))
             list = view.findViewById(R.id.widget_tasks)
