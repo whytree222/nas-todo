@@ -1,6 +1,24 @@
 # 验证记录
 
-## 当前 v0.7.0：星星、年度热力图与 NAS 月底归档
+## 当前 v0.8.0：安卓滑动小组件
+
+[构建 38351581078](https://github.com/whytree222/nas-todo/actions/runs/38351581078) 成功，源提交 `360c14120cfd6b2870b89b6485e8a9b36dbfb16c`。24项后端测试、两端静态分析、各80项Flutter测试及AndroidAPK/Windowsx64编译通过；Windows原生玻璃与独立窗口生命周期检查通过。
+
+Android15模拟器执行6项AndroidJUnitRunner检查：所有列表/卡片工厂提供30条以上数据，样式筛选独立、稳定ID与工厂重建；七天跨年边界及无日期/删除项排除；四色主题、完成删除线及标题不绑定打开应用操作；坏缓存安全回退与重新读取；五个组件和受保护服务已注册、布局为原生ListView/StackView；受控测试窗口中实际触摸滑动移到后续任务，并可到最后一项，Flutter主界面没有被打开。模拟器检查使用独立演示数据和测试宿主，尚未验证所有品牌桌面或真实手机的手势。
+
+旧今日组件保留原provider身份，列表改用新布局资源以重新创建视图。所有模式读取持久化的精简本机副本，不含备注、NAS地址和密钥；勾选仍通过主应用的持久保存队列，未实现关闭应用后的后台NAS同步。已有v0.7.0 NAS服务不需再次更新。
+
+[发布 38352512923](https://github.com/whytree222/nas-todo/actions/runs/38352512923) 成功，[v0.8.0](https://github.com/whytree222/nas-todo/releases/tag/v0.8.0)提供APK、完整WindowsZIP、同版本命名的无密钥NAS源码包、INSTALL.md和SHA256SUMS.txt。核对测试提交、文件完整性、NAS源码一致、上传大小与SHA256。APK仍为测试签名。实现参考 [Android官方集合小组件说明](https://developer.android.com/develop/ui/views/appwidgets/collections)。
+
+| 文件 | 字节数 | SHA256 |
+|---|---:|---|
+| `INSTALL.md` | 1758 | `7e89a4888b26ada0e00b569c8ffb98e4dabb70465d3bfd7c50cc6dcda6eb8aa4` |
+| `SHA256SUMS.txt` | 367 | `77a07672b8642b2f98072f70e4a50ff687a0bbae9cac3543ac766c1052f47e69` |
+| `nas-todo-android-v0.8.0-test.apk` | 160696168 | `9ed9c6f3fe9a7ba66c167e53ac673e5f82299f331d8e7824e0fabb24dee57fe7` |
+| `nas-todo-server-v0.8.0.zip` | 11072 | `ec75ec6d65801aef156b5ef6a39f94325f68e104129777c7c090b582103a8878` |
+| `nas-todo-windows-v0.8.0-x64.zip` | 12499309 | `553b98e84570d21bdea80af48b29a4ee7ceff900fa70533c29dd8a46d2eaeba7` |
+
+## v0.7.0 历史版本：星星、年度热力图与 NAS 月底归档
 
 [构建 38348563693](https://github.com/whytree222/nas-todo/actions/runs/38348563693) 成功，源提交 `e796a0ac5647424d87b9e1e0b75d0e6cb9f87616`。24项后端测试、两端静态分析、各 80 项客户端测试、安卓 APK 与 Windows x64 编译通过，原生小组件及独立窗口生命周期检查通过。
 
