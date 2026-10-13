@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nas_todo/app_controller.dart';
 import 'package:nas_todo/appearance.dart';
 import 'package:nas_todo/daily_celebration.dart';
+import 'package:nas_todo/desktop_widget_bridge.dart';
 import 'package:nas_todo/main.dart';
 import 'package:nas_todo/sync_core.dart';
 import 'package:nas_todo/task_dates.dart';
@@ -83,6 +84,21 @@ Future<void> _preview(WidgetTester tester, String fileName) async {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const desktopChannel = MethodChannel('cn.privatetodo/desktop');
+  final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  var mainVisible = true;
+  setUp(() {
+    mainVisible = true;
+    // Native plugin replies otherwise require platform event delivery outside
+    // the widget tester's fake clock on Windows. Model the real visibility API.
+    messenger.setMockMethodCallHandler(desktopChannel, (call) async {
+      if (call.method == 'isMainVisible') return mainVisible;
+      throw MissingPluginException('Unmocked desktop method ${call.method}');
+    });
+  });
+  tearDown(() => messenger.setMockMethodCallHandler(desktopChannel, null));
+
   testWidgets('Final checkbox celebrates globally and dismisses without same-day replay', (tester) async {
     _size(tester, const Size(390, 844));
     final controller = await _controller();
@@ -156,6 +172,28 @@ void main() {
     expect(find.byType(DailyCelebrationDialog), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('Hidden Windows main window retains widget reward until mainWindowShown', (tester) async {
+    _size(tester, const Size(1280, 800));
+    final controller = await _controller();
+    await _todayTask(controller);
+    await tester.pumpWidget(PrivateTodoApp(controller: controller));
+    await tester.pumpAndSettle();
+    mainVisible = false;
+    final bridge = DesktopWidgetBridge(controller);
+    expect(await bridge.handleCall(MethodCall('widgetComplete', {
+      'id': controller.tasks.single.id, 'completed': true,
+    })), isTrue);
+    await tester.pumpAndSettle();
+    expect(find.byType(DailyCelebrationDialog), findsNothing);
+    expect(controller.pendingDailyCelebration, isNotNull);
+    mainVisible = true;
+    await bridge.handleCall(const MethodCall('mainWindowShown'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DailyCelebrationDialog), findsOneWidget);
+    expect(controller.pendingDailyCelebration, isNull);
+    expect(tester.takeException(), isNull);
+  }, skip: !Platform.isWindows);
 
   testWidgets('Small phone renders a cheerful finite animation and exports readable preview', (tester) async {
     _size(tester, const Size(360, 640));
