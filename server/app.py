@@ -22,6 +22,35 @@ from typing import Any
 import uuid
 
 
+ACHIEVEMENT_TZ = dt.timezone(dt.timedelta(hours=8))
+UNCATEGORIZED_LISTS = {"", "收件箱", "未分类"}
+
+
+def following_month(day: dt.date) -> dt.date:
+    return dt.date(day.year + (day.month == 12), day.month % 12 + 1, 1)
+
+
+def month_achievement(month: str, tasks: list[dict[str, Any]], *, settled: bool = False) -> dict[str, Any]:
+    first = dt.date.fromisoformat(month + "-01")
+    last = following_month(first) - dt.timedelta(days=1)
+    weeks = []
+    start = first
+    while start <= last:
+        end = min(start + dt.timedelta(days=6 - start.weekday()), last)
+        entries = [task for task in tasks if not task["deleted"] and task["due_date"] is not None
+                   and start.isoformat() <= task["due_date"] <= end.isoformat()]
+        total = len(entries)
+        completed = sum(task["completed"] for task in entries)
+        weeks.append({"start": start.isoformat(), "end": end.isoformat(), "total": total,
+                      "completed": completed, "star": total > 0 and completed * 5 >= total * 4})
+        start = end + dt.timedelta(days=1)
+    active = [week for week in weeks if week["total"] > 0]
+    return {"month": month, "weeks": weeks, "total": sum(w["total"] for w in weeks),
+            "completed": sum(w["completed"] for w in weeks), "stars": sum(w["star"] for w in weeks),
+            "status": "empty" if not active else "green" if all(w["star"] for w in active) else "red",
+            "settled": settled, "cleaned": 0}
+
+
 MAX_BODY_BYTES = 1024 * 1024
 MAX_OPERATIONS = 100
 MAX_SQLITE_INT = (1 << 63) - 1
@@ -156,9 +185,10 @@ def row_to_task(row: sqlite3.Row | None) -> dict[str, Any] | None:
 
 
 class SyncService:
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, *, clock=None) -> None:
         config.validate()
         self.config = config
+        self.clock = clock or (lambda: dt.datetime.now(ACHIEVEMENT_TZ).date())
         config.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.initialize()
 
@@ -197,6 +227,14 @@ class SyncService:
             connection.execute("INSERT OR IGNORE INTO metadata(key,value) VALUES('instance_id',?)", (str(uuid.uuid4()),))
             connection.execute("INSERT OR IGNORE INTO metadata(key,value) VALUES('cursor','0')")
             connection.execute("INSERT OR IGNORE INTO metadata(key,value) VALUES('data_bytes','0')")
+            connection.execute("CREATE TABLE IF NOT EXISTS achievement_months (month TEXT PRIMARY KEY, report_json TEXT NOT NULL)")
+            connection.execute("""CREATE TABLE IF NOT EXISTS achievement_archive (
+                month TEXT NOT NULL, task_id TEXT NOT NULL, task_json TEXT NOT NULL,
+                PRIMARY KEY(month, task_id))""")
+            # Start with the activation month; never clean older pre-feature data.
+            month = self.clock().strftime('%Y-%m')
+            connection.execute("INSERT OR IGNORE INTO metadata(key,value) VALUES('achievement_start_month',?)", (month,))
+            connection.execute("INSERT OR IGNORE INTO metadata(key,value) VALUES('achievement_next_month',?)", (month,))
             connection.execute("PRAGMA user_version=1")
             connection.commit()
         except BaseException:
@@ -205,6 +243,55 @@ class SyncService:
         finally:
             connection.close()
 
+    def _settle_locked(self, connection: sqlite3.Connection, today: dt.date) -> None:
+        next_month = connection.execute("SELECT value FROM metadata WHERE key='achievement_next_month'").fetchone()[0]
+        current = today.strftime('%Y-%m')
+        cursor = int(connection.execute("SELECT value FROM metadata WHERE key='cursor'").fetchone()[0])
+        while next_month < current:
+            first = dt.date.fromisoformat(next_month + '-01')
+            after = following_month(first)
+            rows = connection.execute("SELECT * FROM tasks WHERE deleted=0 AND due_date>=? AND due_date<?",
+                                      (first.isoformat(), after.isoformat())).fetchall()
+            tasks = [row_to_task(row) for row in rows]
+            report = month_achievement(next_month, tasks, settled=True)
+            cleaned = [task for task in tasks if task['list_name'].strip() not in UNCATEGORIZED_LISTS]
+            report['cleaned'] = len(cleaned)
+            connection.execute("INSERT INTO achievement_months(month,report_json) VALUES(?,?)",
+                               (next_month, encode_json(report)))
+            for task in cleaned:
+                # Archive first, then emit ordinary versioned tombstones to both clients.
+                connection.execute("INSERT INTO achievement_archive(month,task_id,task_json) VALUES(?,?,?)",
+                                   (next_month, task['id'], encode_json(task)))
+                cursor += 1
+                connection.execute("UPDATE tasks SET deleted=1,version=version+1,updated_at=?,change_seq=? WHERE id=?",
+                                   (utc_now(), cursor, task['id']))
+            next_month = after.strftime('%Y-%m')
+            connection.execute("UPDATE metadata SET value=? WHERE key='achievement_next_month'", (next_month,))
+        connection.execute("UPDATE metadata SET value=? WHERE key='cursor'", (str(cursor),))
+
+    def settle_months(self) -> None:
+        connection = self.connect()
+        try:
+            connection.execute('BEGIN IMMEDIATE')
+            self._settle_locked(connection, self.clock())
+            connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def _achievement_state(self, connection: sqlite3.Connection) -> dict[str, Any]:
+        today = self.clock()
+        month = today.strftime('%Y-%m')
+        tasks = [row_to_task(row) for row in connection.execute(
+            'SELECT * FROM tasks WHERE deleted=0 AND due_date>=? AND due_date<?',
+            (month + '-01', following_month(today).isoformat()))]
+        return {'version': 1, 'today': today.isoformat(), 'start_month': connection.execute(
+            "SELECT value FROM metadata WHERE key='achievement_start_month'").fetchone()[0],
+            'live': month_achievement(month, tasks), 'settled': [json.loads(row[0]) for row in connection.execute(
+                'SELECT report_json FROM achievement_months ORDER BY month')]}
+
     def sync(self, value: Any) -> dict[str, Any]:
         request = validate_request(value)
         operations = request["operations"]
@@ -212,6 +299,7 @@ class SyncService:
         try:
             # One writer at a time. Versions, result history, and cursor commit together.
             connection.execute("BEGIN IMMEDIATE")
+            self._settle_locked(connection, self.clock())
             metadata = dict(connection.execute("SELECT key,value FROM metadata"))
             instance_id = metadata["instance_id"]
             cursor = int(metadata["cursor"])
@@ -291,6 +379,7 @@ class SyncService:
             changes = [row_to_task(row) for row in connection.execute(
                 "SELECT * FROM tasks WHERE change_seq>? ORDER BY change_seq", (request["cursor"],))]
             response = {"instance_id": instance_id, "cursor": cursor, "changes": changes, "results": results}
+            response['achievement'] = self._achievement_state(connection)
             connection.commit()
             return response
         except BaseException:
@@ -471,7 +560,16 @@ class SyncHTTPServer(ThreadingHTTPServer):
         self.service = service
         self.slots = threading.BoundedSemaphore(service.config.max_workers)
         self.sync_slots = threading.BoundedSemaphore(min(2, service.config.max_workers))
+        self._achievement_check = 0.0
         super().__init__((service.config.host, service.config.port), SyncHandler)
+
+    def service_actions(self) -> None:
+        if time.monotonic() >= self._achievement_check:
+            self._achievement_check = time.monotonic() + 60
+            try:
+                self.service.settle_months()
+            except (sqlite3.Error, OSError):
+                logging.exception('Monthly settlement failed; will retry without partial cleanup')
 
     def process_request(self, request: socket.socket, client_address: Any) -> None:
         if not self.slots.acquire(blocking=False):

@@ -5,6 +5,7 @@ import '../desktop_window.dart';
 import '../sync_core.dart';
 import '../task_dates.dart';
 import 'calendar_screen.dart';
+import 'achievements_screen.dart';
 import 'conflict_dialog.dart';
 import 'settings_screen.dart';
 import 'task_editor.dart';
@@ -22,7 +23,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _page = 0;
   String? _selectedList;
   String _sort = 'due';
-  static const _titles = ['全部待办', '今天', '已完成', '日历', '连接设置'];
+  static const _titles = ['全部待办', '今天', '已完成', '日历', '连接设置', '成就'];
   DateTime? _calendarDate = DateTime.now();
   Future<void> _openWidget() async {
     try {
@@ -157,7 +158,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 _errorBanner(compact: compact),
                               ],
                               SizedBox(height: compact ? 12 : 22),
-                              if (_page == 4)
+                              if (_page == 5)
+                                Expanded(child: AchievementsScreen(controller: widget.controller))
+                              else if (_page == 4)
                                 Expanded(child: SettingsScreen(controller: widget.controller))
                               else if (_page == 3)
                                 Expanded(child: CalendarScreen(controller: widget.controller,
@@ -223,7 +226,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ],
               ),
             ),
-            floatingActionButton: !wide && _page != 4 && _page != 3
+            floatingActionButton: !wide && _page != 4 && _page != 3 && _page != 5
                 ? FloatingActionButton.extended(
                     onPressed: widget.controller.editing
                         ? null
@@ -243,6 +246,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       NavigationDestination(icon: Icon(Icons.task_alt_rounded), label: '已完成'),
                       NavigationDestination(icon: Icon(Icons.calendar_month_outlined), label: '日历'),
                       NavigationDestination(icon: Icon(Icons.settings_outlined), label: '设置'),
+                      NavigationDestination(icon: Icon(Icons.workspace_premium_outlined), label: '成就'),
                     ],
                   ),
           );
@@ -276,7 +280,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.8),
               ),
-              if (_page != 4 && !compact) ...[
+              if (_page != 4 && _page != 5 && !compact) ...[
                 const SizedBox(height: 8),
                 Text('$activeCount 项进行中 · $completedCount 项已完成', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13)),
               ],
@@ -286,7 +290,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (DesktopWindow.supported)
           IconButton(tooltip: '桌面小组件', onPressed: _openWidget,
             icon: const Icon(Icons.picture_in_picture_alt_rounded)),
-        if ((wide && _page != 4) || _page == 3) ...[
+        if ((wide && _page != 4 && _page != 5) || _page == 3) ...[
           SizedBox(width: wide ? 16 : 8),
           FilledButton.icon(
             onPressed: widget.controller.editing
@@ -340,6 +344,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _navItem('已完成', Icons.task_alt_rounded, _page == 2,
               controller.tasks.where((task) => task.completed).length, () => _selectPage(2)),
           _navItem('日历', Icons.calendar_month_outlined, _page == 3, null, () => _selectPage(3)),
+          _navItem('成就', Icons.workspace_premium_outlined, _page == 5, null, () => _selectPage(5)),
           const SizedBox(height: 28),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),

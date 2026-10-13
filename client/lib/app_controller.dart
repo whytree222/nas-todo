@@ -7,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'appearance.dart';
+import 'achievement_core.dart';
 import 'storage_io.dart';
 import 'sync_core.dart';
 
@@ -64,6 +65,8 @@ class AppController extends ChangeNotifier {
   }
 
   List<Task> get tasks => engine.tasks;
+  AchievementState? get achievement => engine.achievement;
+  bool get achievementsSupported => engine.achievementsSupported;
   List<SyncConflict> get conflicts => engine.conflicts;
   int get pendingCount => engine.pendingCount;
   DateTime? get lastSyncedAt => engine.lastSyncedAt;

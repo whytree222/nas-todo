@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'sync_core.dart';
+import 'achievement_core.dart';
 
 class FileDataStore implements DataStore {
   final File file;
@@ -27,6 +28,7 @@ class FileDataStore implements DataStore {
         for (final raw in state['conflicts'] as List) {
           SyncConflict.fromJson(Map<String, dynamic>.from(raw as Map));
         }
+        if (state['achievement'] != null) AchievementState.fromJson(Map<String, dynamic>.from(state['achievement'] as Map));
         _primaryIsValid = candidate.path == file.path;
         return state;
       } catch (error) {

@@ -96,6 +96,14 @@ def main():
     guide = dist / 'INSTALL.md'
     shutil.copyfile(NOTES, guide)
     assets = [apk_output, windows_output, guide]
+    if tuple(map(int, VERSION.split('.'))) >= (0, 7, 0):
+        server_output = dist / f'nas-todo-server-{TAG}.zip'
+        with zipfile.ZipFile(server_output, 'w', zipfile.ZIP_DEFLATED) as archive:
+            for name in ('server/app.py', 'server/Dockerfile', 'docs/UPGRADE-v0.7.0.md'):
+                archive.write(name, name)
+        with zipfile.ZipFile(server_output) as archive:
+            check(archive.testzip() is None and 'server/app.py' in archive.namelist(), 'Server upgrade package incomplete')
+        assets.append(server_output)
     hashes = dist / 'SHA256SUMS.txt'
     hashes.write_text(''.join(f'{digest(p)}  {p.name}\n' for p in assets), encoding='utf-8')
     assets.append(hashes)

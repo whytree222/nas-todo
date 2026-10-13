@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'achievement_core.dart';
 
 /// Storage must finish durably before its returned future completes.
 abstract interface class DataStore {
@@ -154,12 +155,16 @@ class SyncEngine {
   int _cursor = 0;
   DateTime? _lastSyncedAt;
   bool _loaded = false;
+  AchievementState? _achievement;
+  bool _achievementsSupported = false;
 
   SyncEngine(this.store, this.transport);
   List<Task> get tasks => List.unmodifiable(_tasks.values.where((t) => !t.deleted));
   List<SyncConflict> get conflicts => List.unmodifiable(_conflicts.values);
   int get pendingCount => _operations.length;
   DateTime? get lastSyncedAt => _lastSyncedAt;
+  AchievementState? get achievement => _achievement;
+  bool get achievementsSupported => _achievementsSupported;
 
   Future<T> _serial<T>(Future<T> Function() action) {
     final future = _tail.then((_) => action());
@@ -185,10 +190,13 @@ class SyncEngine {
     'attempted_ids': _attemptedIds.toList(),
     'conflicts': _conflicts.values.map((c) => c.toJson()).toList(),
     'last_synced_at': _lastSyncedAt?.toUtc().toIso8601String(),
+    'achievement': _achievement?.toJson(), 'achievements_supported': _achievementsSupported,
   };
 
   void _restore(Map<String, dynamic> state) {
     if (state['schema'] != 1) throw StateError('本地数据版本不受支持');
+    _achievement = state['achievement'] == null ? null : AchievementState.fromJson(_map(state['achievement']));
+    _achievementsSupported = state['achievements_supported'] as bool? ?? false;
     _instanceId = state['instance_id'] as String?;
     _cursor = state['cursor'] as int;
     if (_cursor < 0) throw StateError('本地同步记录损坏');
@@ -355,6 +363,7 @@ class SyncEngine {
       if (cursor < requestCursor) throw StateError('NAS 返回的同步进度无效');
       final changes = (response['changes'] as List).map((raw) => Task.fromJson(_map(raw))).toList();
       final results = (response['results'] as List).map(_map).toList();
+      final achievement = response['achievement'] == null ? null : AchievementState.fromJson(_map(response['achievement']));
       final sentIds = batch.map((op) => op['op_id'] as String).toSet();
       final seen = <String>{};
       for (final result in results) {
@@ -372,6 +381,8 @@ class SyncEngine {
       if (seen.length != sentIds.length) throw StateError('NAS 未确认全部修改，稍后重试');
       await _commit(() {
         _instanceId = instance;
+        if (achievement != null) _achievement = achievement;
+        _achievementsSupported = achievement != null;
         for (final result in results) {
           final op = batch.firstWhere((op) => op['op_id'] == result['op_id']);
           final taskId = op['task_id'] as String;

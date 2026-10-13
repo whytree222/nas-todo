@@ -15,17 +15,21 @@ class NasServer {
   NasServer(this.directory);
   String get python => Platform.environment['NAS_TODO_TEST_PYTHON'] ?? 'python';
   File get database => File('${directory.path}/todo.sqlite');
+  File get achievementClock => File('${directory.path}/achievement-clock.txt');
   String get backend => Directory('../server').absolute.path;
   Future<void> start() async {
     process = await Process.start(python, ['-B', '-u', '-c', '''
 import sys
 from pathlib import Path
 sys.path.insert(0, sys.argv[1])
-from app import Config, SyncService, SyncHTTPServer
-server = SyncHTTPServer(SyncService(Config(Path(sys.argv[2]), sys.argv[3], '127.0.0.1', 0)))
+import datetime as dt
+from app import Config, SyncService, SyncHTTPServer, ACHIEVEMENT_TZ
+clock_file = Path(sys.argv[4])
+clock = lambda: dt.date.fromisoformat(clock_file.read_text().strip()) if clock_file.exists() else dt.datetime.now(ACHIEVEMENT_TZ).date()
+server = SyncHTTPServer(SyncService(Config(Path(sys.argv[2]), sys.argv[3], '127.0.0.1', 0), clock=clock))
 print('http://127.0.0.1:' + str(server.server_address[1]), flush=True)
 server.serve_forever()
-''', backend, database.path, testToken]);
+''', backend, database.path, testToken, achievementClock.path]);
     final firstLine = Completer<String>();
     process!.stdout.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
       if (!firstLine.isCompleted) firstLine.complete(line);
@@ -129,6 +133,33 @@ void main() {
     transports.clear();
     await nas.stop();
     await directory.delete(recursive: true);
+  });
+
+  test('NAS month-end achievements and cleanup reach both peers and protect an offline edit', () async {
+    await nas.achievementClock.writeAsString('2026-10-01', flush: true);
+    final a = await device('achievement-a');
+    final b = await device('achievement-b');
+    for (var index = 0; index < 5; index++) {
+      await a.saveTask(TaskDraft(title: 'Week task $index', listName: '工作', dueDate: '2026-10-01', completed: index < 4));
+    }
+    await a.sync(); await b.sync();
+    expect(a.achievement!.live.stars, 1);
+    final editing = b.tasks.first;
+    await b.saveTask(TaskDraft(title: 'Offline note kept', listName: '工作', dueDate: editing.dueDate,
+      completed: editing.completed), id: editing.id);
+    await nas.achievementClock.writeAsString('2026-11-01', flush: true);
+    await a.sync();
+    expect(a.tasks, isEmpty);
+    expect(a.achievement!.settled.single.stars, 1);
+    expect(a.achievement!.settled.single.cleaned, 5);
+    await b.sync();
+    expect(b.achievement!.settled.single.toJson(), a.achievement!.settled.single.toJson());
+    expect(b.conflicts.single.local!.title, 'Offline note kept');
+    expect(b.conflicts.single.remote!.deleted, isTrue);
+    await b.resolveConflict(editing.id, keepLocal: false);
+    expect(b.tasks, isEmpty);
+    final reopened = await device('achievement-a');
+    expect(reopened.achievement!.settled.single.stars, 1);
   });
 
   test('offline edits survive restart and coalesce without uploading', () async {
