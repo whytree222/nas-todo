@@ -1,6 +1,6 @@
 # 云端编译与公开发布
 
-运行 [38351581078](https://github.com/whytree222/nas-todo/actions/runs/38351581078) 全部成功，源提交 `360c14120cfd6b2870b89b6485e8a9b36dbfb16c`。v0.8.0安装包在 [Release](https://github.com/whytree222/nas-todo/releases/tag/v0.8.0)，见 [安装说明](RELEASE-v0.8.0.md)。安卓构建在上传APK前执行Android15模拟器原生滑动小组件测试，结果报告为android-widget-native-test-reports产物。
+运行 [38393229963](https://github.com/whytree222/nas-todo/actions/runs/38393229963) 全部成功，源提交 `0bf438eeb505c16613e9b96e56e3eccf6b7bf5a9`。v0.9.0安装包在 [Release](https://github.com/whytree222/nas-todo/releases/tag/v0.9.0)，见 [安装说明](RELEASE-v0.9.0.md)。安卓任务保存中文字体渲染的手机/桌面鼓励卡片预览，并执行Android15模拟器小组件测试。
 
 当前仓库按使用者授权保持公开，源码和安装包可以公开下载，使用 Actions 编译。部署密钥和 NAS 数据不需要提供给 GitHub，客户端安装后再填写。
 
@@ -22,7 +22,7 @@
 - nas-todo-android-test-apk：解压得到 app-debug.apk，安装到安卓。
 - nas-todo-windows-full-release：解压整个文件夹，运行其中的 nas_todo.exe，保留旁边的 DLL 和 data 文件夹。
 
-Actions 产物保留14天。各publish工作流固定已验证的对应版本；publish-v08.yml等待包含安卓原生小组件测试的构建成功，再核对并发布安装包。当前APK为测试签名，长期覆盖升级仍需固定签名。
+Actions 产物保留14天。各publish工作流固定已验证的对应版本；publish-v09.yml等待鼓励与小组件检查、两端编译成功后核对并发布安装包。APK仍为测试签名，长期覆盖升级需要固定签名。
 
 ## 首次同步验收
 
