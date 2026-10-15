@@ -1,6 +1,22 @@
 # 验证记录
 
-## 当前 v0.9.0：今日鼓励与安卓紧急程度
+## 当前 v0.9.1：已有分组选择
+
+[构建 38681645447](https://github.com/whytree222/nas-todo/actions/runs/38681645447) 成功，源提交 `13fac04d35c0b2cbbbdae81969c6765c75d6f1fd`。24项后端测试、两端静态分析、安卓102项/Windows103项Flutter测试、AndroidAPK与Windowsx64编译、安卓8项原生小组件测试以及Windows玻璃与窗口生命周期检查通过。Windows可见性专用测试仅Windows执行。
+
+新建/编辑保留手工输入框，右侧菜单展示全部已知清单，不按当前默认文本过滤。检查覆盖已有（含已完成）任务清单、默认收件箱、重复名称合并、初始/编辑清单、选择后保留标题/备注/日期/优先级、编辑期间新增的清单选项、手输新组保存，以及窄窗口中的长名称和滚动选择。分组仍沿用任务的list_name，没有新增NAS表或协议。
+
+[发布 38682228465](https://github.com/whytree222/nas-todo/actions/runs/38682228465) 成功，[v0.9.1](https://github.com/whytree222/nas-todo/releases/tag/v0.9.1)提供APK、完整WindowsZIP、无密钥NAS源码包、INSTALL.md和SHA256SUMS.txt。核对源提交、文件完整性、图标字体、NAS源码一致、上传字节数及SHA256。现有NAS无需为本次改动再次部署；APK仍为测试签名。
+
+| 文件 | 字节数 | SHA256 |
+|---|---:|---|
+| `INSTALL.md` | 1051 | `23f0313079715f2ec5ed5e0f05e0b4b216560aed0143ac35cdff0fcc881a82af` |
+| `SHA256SUMS.txt` | 367 | `aee333d2f7219f321d0673fd4970859fac1f48698936df7ecfaa3f1ef3b42307` |
+| `nas-todo-android-v0.9.1-test.apk` | 160731069 | `2bc9a5246cc31db5b84b1205be65bce7f121e5cc584df3e544558b002f829975` |
+| `nas-todo-server-v0.9.1.zip` | 11072 | `65179e873f367537aeee586565264bb6368bc261c0775aa3cb9812438bed6194` |
+| `nas-todo-windows-v0.9.1-x64.zip` | 12513877 | `eda4219e8327ffcd468aa7049e61da4cb906bfc77ac47e341e822f42597a81e4` |
+
+## v0.9.0 历史版本：今日鼓励与安卓紧急程度
 
 [构建 38393229963](https://github.com/whytree222/nas-todo/actions/runs/38393229963) 成功，源提交 `0bf438eeb505c16613e9b96e56e3eccf6b7bf5a9`。24项后端测试、两端静态分析、安卓97项/Windows98项Flutter测试及AndroidAPK/Windowsx64编译通过；Windows原生玻璃与独立窗口生命周期检查通过。Windows主窗可见性专用测试仅在Windows执行，安卓按平台跳过。
 
