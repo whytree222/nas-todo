@@ -64,12 +64,38 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
     _list = TextEditingController(
       text: widget.task?.listName ?? widget.initialListName ?? '收件箱',
     );
-    _dueDate = widget.task != null ? widget.task!.dueDate : widget.initialDueDate;
+    _dueDate = widget.task != null
+        ? widget.task!.dueDate
+        : widget.initialDueDate;
     _priority = widget.task?.priority ?? 0;
   }
 
   void _refresh() {
     if (mounted) setState(() {});
+  }
+
+  List<String> get _availableLists {
+    final names = <String>{
+      for (final task in widget.controller.tasks)
+        if (!task.deleted && task.listName.trim().isNotEmpty)
+          task.listName.trim(),
+      if (widget.task?.listName.trim().isNotEmpty ?? false)
+        widget.task!.listName.trim(),
+      if (widget.initialListName?.trim().isNotEmpty ?? false)
+        widget.initialListName!.trim(),
+    };
+    names.remove('收件箱');
+    return ['收件箱', ...(names.toList()..sort())];
+  }
+
+  void _selectList(String name) {
+    if (_saving) return;
+    setState(() {
+      _list.value = TextEditingValue(
+        text: name,
+        selection: TextSelection(baseOffset: 0, extentOffset: name.length),
+      );
+    });
   }
 
   @override
@@ -96,7 +122,8 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
     );
     if (date != null && mounted) {
       setState(() {
-        _dueDate = '${date.year.toString().padLeft(4, '0')}-'
+        _dueDate =
+            '${date.year.toString().padLeft(4, '0')}-'
             '${date.month.toString().padLeft(2, '0')}-'
             '${date.day.toString().padLeft(2, '0')}';
       });
@@ -113,7 +140,9 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
     if (!mounted) return;
     final original = widget.task;
     if (original != null && !_saveAsNew) {
-      final matches = widget.controller.tasks.where((task) => task.id == original.id);
+      final matches = widget.controller.tasks.where(
+        (task) => task.id == original.id,
+      );
       final current = matches.isEmpty ? null : matches.first;
       if (current == null) {
         setState(() {
@@ -125,7 +154,8 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
       }
       final currentContent = jsonEncode(TaskDraft.fromTask(current).toJson());
       final originalContent = jsonEncode(TaskDraft.fromTask(original).toJson());
-      if (currentContent != originalContent && currentContent != _acknowledgedContent) {
+      if (currentContent != originalContent &&
+          currentContent != _acknowledgedContent) {
         setState(() {
           _saving = false;
           _confirmOverwrite = true;
@@ -167,8 +197,12 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
         backgroundColor: colors.surface,
         title: Row(
           children: [
-            Icon(widget.task == null ? Icons.add_task_rounded : Icons.edit_note_rounded,
-                color: colors.primary),
+            Icon(
+              widget.task == null
+                  ? Icons.add_task_rounded
+                  : Icons.edit_note_rounded,
+              color: colors.primary,
+            ),
             const SizedBox(width: 12),
             Text(widget.task == null ? '新建待办' : '编辑待办'),
           ],
@@ -195,7 +229,8 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
                       hintText: '下一件想完成的事',
                       counterText: '',
                     ),
-                    validator: (value) => (value ?? '').trim().isEmpty ? '写一个待办标题' : null,
+                    validator: (value) =>
+                        (value ?? '').trim().isEmpty ? '写一个待办标题' : null,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -217,13 +252,35 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
                     controller: _list,
                     enabled: !_saving,
                     maxLength: 60,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: '清单',
-                      hintText: '例如：工作、生活、收件箱',
-                      prefixIcon: Icon(Icons.folder_outlined),
+                      hintText: '选择已有清单，或输入新名称',
+                      prefixIcon: const Icon(Icons.folder_outlined),
+                      suffixIcon: PopupMenuButton<String>(
+                        key: const ValueKey('task-list-picker'),
+                        tooltip: '选择已有清单',
+                        enabled: !_saving,
+                        icon: const Icon(Icons.arrow_drop_down_rounded),
+                        constraints: const BoxConstraints(maxWidth: 320),
+                        onSelected: _selectList,
+                        itemBuilder: (context) => [
+                          for (final name in _availableLists)
+                            CheckedPopupMenuItem<String>(
+                              key: ValueKey('task-list-option-$name'),
+                              value: name,
+                              checked: name == _list.text.trim(),
+                              child: Text(
+                                name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                      ),
                       counterText: '',
                     ),
-                    validator: (value) => (value ?? '').trim().isEmpty ? '填写清单名称' : null,
+                    validator: (value) =>
+                        (value ?? '').trim().isEmpty ? '填写清单名称' : null,
                   ),
                   const SizedBox(height: 16),
                   Text('截止日期', style: Theme.of(context).textTheme.labelLarge),
@@ -233,7 +290,10 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: _saving ? null : _pickDate,
-                          icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                          icon: const Icon(
+                            Icons.calendar_today_outlined,
+                            size: 18,
+                          ),
                           label: Text(_dueDate ?? '不设日期'),
                         ),
                       ),
@@ -241,7 +301,9 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
                         const SizedBox(width: 8),
                         IconButton(
                           tooltip: '清除截止日期',
-                          onPressed: _saving ? null : () => setState(() => _dueDate = null),
+                          onPressed: _saving
+                              ? null
+                              : () => setState(() => _dueDate = null),
                           icon: const Icon(Icons.close_rounded),
                         ),
                       ],
@@ -261,7 +323,8 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
                       selected: {_priority},
                       onSelectionChanged: _saving
                           ? null
-                          : (selection) => setState(() => _priority = selection.first),
+                          : (selection) =>
+                                setState(() => _priority = selection.first),
                     ),
                   ),
                   if (_error != null) ...[
@@ -273,23 +336,38 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(color: colors.surfaceContainerLow, borderRadius: BorderRadius.circular(12)),
+                      decoration: BoxDecoration(
+                        color: colors.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('收到的新版本', style: TextStyle(fontWeight: FontWeight.w700)),
+                          const Text(
+                            '收到的新版本',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
                           const SizedBox(height: 8),
                           Text(_newerTask!.title),
                           if (_newerTask!.note.isNotEmpty) ...[
                             const SizedBox(height: 6),
-                            Text(_newerTask!.note, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+                            Text(
+                              _newerTask!.note,
+                              style: TextStyle(
+                                color: colors.onSurfaceVariant,
+                                fontSize: 12,
+                              ),
+                            ),
                           ],
                           const SizedBox(height: 8),
                           Text(
                             '${_newerTask!.listName} · ${_newerTask!.completed ? '已完成' : '未完成'} · '
                             '${['普通', '较高', '紧急'][_newerTask!.priority.clamp(0, 2).toInt()]}优先级 · '
                             '${_newerTask!.dueDate ?? '无截止日期'}',
-                            style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+                            style: TextStyle(
+                              color: colors.onSurfaceVariant,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
@@ -308,9 +386,23 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
           FilledButton.icon(
             onPressed: _saving || widget.controller.syncing ? null : _save,
             icon: _saving
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.check_rounded, size: 18),
-            label: Text(_saving ? '正在保存' : widget.controller.syncing ? '同步中，请稍候' : _saveAsNew ? '保存为新待办' : _confirmOverwrite ? '确认覆盖更新' : '保存到本机'),
+            label: Text(
+              _saving
+                  ? '正在保存'
+                  : widget.controller.syncing
+                  ? '同步中，请稍候'
+                  : _saveAsNew
+                  ? '保存为新待办'
+                  : _confirmOverwrite
+                  ? '确认覆盖更新'
+                  : '保存到本机',
+            ),
           ),
         ],
       ),
