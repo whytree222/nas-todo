@@ -340,8 +340,9 @@ class _HomeScreenState extends State<HomeScreen>
               final tasks = _visibleTasks();
               Task? selected;
               for (final task in widget.controller.tasks) {
-                if (task.id == _selectedTaskId && !task.deleted)
+                if (task.id == _selectedTaskId && !task.deleted) {
                   selected = task;
+                }
               }
               return Scaffold(
                 key: _scaffoldKey,
