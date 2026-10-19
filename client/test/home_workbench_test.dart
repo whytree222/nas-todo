@@ -273,7 +273,7 @@ void main() {
       (tester) async {
         final previousDisableShadows = debugDisableShadows;
         debugDisableShadows = false;
-        addTearDown(() => debugDisableShadows = previousDisableShadows);
+        try {
         _size(tester, desktop ? const Size(1440, 900) : const Size(390, 844));
         final controller = await _controller();
         await _seed(controller);
@@ -316,6 +316,9 @@ void main() {
           await _preview(tester, 'workbench-matrix.png', font != null);
         }
         expect(tester.takeException(), isNull);
+        } finally {
+          debugDisableShadows = previousDisableShadows;
+        }
       },
     );
   }
