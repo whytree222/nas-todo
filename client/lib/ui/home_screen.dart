@@ -156,6 +156,7 @@ class _HomeScreenState extends State<HomeScreen>
   String _presentation = 'list';
   int? _priorityFilter;
   String? _selectedTaskId;
+  bool _detailVisible = true;
   final _quickTitle = TextEditingController();
   final _quickFocus = FocusNode();
   final _searchFocus = FocusNode();
@@ -327,207 +328,215 @@ class _HomeScreenState extends State<HomeScreen>
       child: Focus(
         autofocus: true,
         child: AnimatedBuilder(
-        animation: widget.controller,
-        builder: (context, _) => LayoutBuilder(
-          builder: (context, constraints) {
-            final wide =
-                constraints.maxWidth >= 1000 && constraints.maxHeight >= 500;
-            final details = wide && constraints.maxWidth >= 1220 && _taskPage;
-            final colors = Theme.of(context).colorScheme;
-            final tasks = _visibleTasks();
-            Task? selected;
-            for (final task in widget.controller.tasks) {
-              if (task.id == _selectedTaskId && !task.deleted) selected = task;
-            }
-            return Scaffold(
-              key: _scaffoldKey,
-              drawer: wide
-                  ? null
-                  : Drawer(child: SafeArea(child: _sidebar(drawer: true))),
-              body: SafeArea(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (wide) ...[_rail(), _sidebar()],
-                    Expanded(
-                      child: ColoredBox(
-                        color: colors.surface,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _header(wide),
-                            if (widget.controller.error != null) _errorBanner(),
-                            if (_page == 5)
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
+          animation: widget.controller,
+          builder: (context, _) => LayoutBuilder(
+            builder: (context, constraints) {
+              final wide =
+                  constraints.maxWidth >= 1000 && constraints.maxHeight >= 500;
+              final canShowDetails =
+                  wide && constraints.maxWidth >= 1220 && _taskPage;
+              final details = canShowDetails && _detailVisible;
+              final colors = Theme.of(context).colorScheme;
+              final tasks = _visibleTasks();
+              Task? selected;
+              for (final task in widget.controller.tasks) {
+                if (task.id == _selectedTaskId && !task.deleted)
+                  selected = task;
+              }
+              return Scaffold(
+                key: _scaffoldKey,
+                drawer: wide
+                    ? null
+                    : Drawer(child: SafeArea(child: _sidebar(drawer: true))),
+                body: SafeArea(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (wide) ...[_rail(), _sidebar()],
+                      Expanded(
+                        child: ColoredBox(
+                          color: colors.surface,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _header(wide),
+                              if (widget.controller.error != null)
+                                _errorBanner(),
+                              if (_page == 5)
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                    child: AchievementsScreen(
+                                      controller: widget.controller,
+                                    ),
                                   ),
-                                  child: AchievementsScreen(
-                                    controller: widget.controller,
+                                )
+                              else if (_page == 4)
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                    child: SettingsScreen(
+                                      controller: widget.controller,
+                                    ),
                                   ),
-                                ),
-                              )
-                            else if (_page == 4)
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
+                                )
+                              else if (_page == 3)
+                                Expanded(
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: wide ? 20 : 10,
+                                    ),
+                                    child: CalendarScreen(
+                                      controller: widget.controller,
+                                      initialDate: _calendarDate,
+                                      initialUnscheduled: _calendarDate == null,
+                                      onDateSelected: (date) =>
+                                          _calendarDate = date,
+                                    ),
                                   ),
-                                  child: SettingsScreen(
-                                    controller: widget.controller,
-                                  ),
-                                ),
-                              )
-                            else if (_page == 3)
-                              Expanded(
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: wide ? 20 : 10,
-                                  ),
-                                  child: CalendarScreen(
-                                    controller: widget.controller,
-                                    initialDate: _calendarDate,
-                                    initialUnscheduled: _calendarDate == null,
-                                    onDateSelected: (date) =>
-                                        _calendarDate = date,
-                                  ),
-                                ),
-                              )
-                            else ...[
-                              _taskToolbar(tasks.length),
-                              _quickEntry(),
-                              Expanded(
-                                child: _presentation == 'board'
-                                    ? TaskBoardView(
-                                        controller: widget.controller,
-                                        tasks: tasks,
-                                        onEdit: _editTask,
-                                      )
-                                    : _presentation == 'matrix'
-                                    ? TaskMatrixView(
-                                        controller: widget.controller,
-                                        tasks: tasks,
-                                        onEdit: _editTask,
-                                      )
-                                    : tasks.isEmpty
-                                    ? _emptyState()
-                                    : ListView.separated(
-                                        key: const ValueKey(
-                                          'workbench-task-list',
+                                )
+                              else ...[
+                                _taskToolbar(tasks.length),
+                                _quickEntry(),
+                                Expanded(
+                                  child: _presentation == 'board'
+                                      ? TaskBoardView(
+                                          controller: widget.controller,
+                                          tasks: tasks,
+                                          onEdit: _editTask,
+                                        )
+                                      : _presentation == 'matrix'
+                                      ? TaskMatrixView(
+                                          controller: widget.controller,
+                                          tasks: tasks,
+                                          onEdit: _editTask,
+                                        )
+                                      : tasks.isEmpty
+                                      ? _emptyState()
+                                      : ListView.separated(
+                                          key: const ValueKey(
+                                            'workbench-task-list',
+                                          ),
+                                          padding: EdgeInsets.fromLTRB(
+                                            wide ? 22 : 12,
+                                            0,
+                                            wide ? 22 : 12,
+                                            96,
+                                          ),
+                                          itemCount: tasks.length,
+                                          separatorBuilder: (_, index) =>
+                                              Divider(
+                                                height: 1,
+                                                indent: 42,
+                                                color: colors.outlineVariant
+                                                    .withValues(alpha: 0.5),
+                                              ),
+                                          itemBuilder: (context, index) {
+                                            final task = tasks[index];
+                                            final conflict = widget
+                                                .controller
+                                                .conflicts
+                                                .any(
+                                                  (item) =>
+                                                      item.taskId == task.id,
+                                                );
+                                            return _WorkbenchTaskRow(
+                                              task: task,
+                                              today: _today,
+                                              conflict: conflict,
+                                              selected:
+                                                  details &&
+                                                  selected?.id == task.id,
+                                              busy: widget.controller.editing,
+                                              onToggle: () => widget.controller
+                                                  .setCompleted(
+                                                    task.id,
+                                                    !task.completed,
+                                                  ),
+                                              onEdit: () => _editTask(task),
+                                              onDelete: () => _deleteTask(task),
+                                              onSelect: canShowDetails
+                                                  ? () => setState(() {
+                                                      _selectedTaskId = task.id;
+                                                      _detailVisible = true;
+                                                    })
+                                                  : null,
+                                              onConflict: () =>
+                                                  showConflictDialog(
+                                                    context,
+                                                    widget.controller,
+                                                  ),
+                                            );
+                                          },
                                         ),
-                                        padding: EdgeInsets.fromLTRB(
-                                          wide ? 22 : 12,
-                                          0,
-                                          wide ? 22 : 12,
-                                          96,
-                                        ),
-                                        itemCount: tasks.length,
-                                        separatorBuilder: (_, index) => Divider(
-                                          height: 1,
-                                          indent: 42,
-                                          color: colors.outlineVariant
-                                              .withValues(alpha: 0.5),
-                                        ),
-                                        itemBuilder: (context, index) {
-                                          final task = tasks[index];
-                                          final conflict = widget
-                                              .controller
-                                              .conflicts
-                                              .any(
-                                                (item) =>
-                                                    item.taskId == task.id,
-                                              );
-                                          return _WorkbenchTaskRow(
-                                            task: task,
-                                            today: _today,
-                                            conflict: conflict,
-                                            selected:
-                                                details &&
-                                                selected?.id == task.id,
-                                            busy: widget.controller.editing,
-                                            onToggle: () =>
-                                                widget.controller.setCompleted(
-                                                  task.id,
-                                                  !task.completed,
-                                                ),
-                                            onEdit: () => _editTask(task),
-                                            onDelete: () => _deleteTask(task),
-                                            onSelect: details
-                                                ? () => setState(
-                                                    () => _selectedTaskId =
-                                                        task.id,
-                                                  )
-                                                : null,
-                                            onConflict: () =>
-                                                showConflictDialog(
-                                                  context,
-                                                  widget.controller,
-                                                ),
-                                          );
-                                        },
-                                      ),
-                              ),
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
                       ),
-                    ),
-                    if (details)
-                      TaskDetailPane(
-                        controller: widget.controller,
-                        task: selected,
-                        onEdit: () {
-                          if (selected != null) _editTask(selected);
-                        },
-                        onDelete: () {
-                          if (selected != null) _deleteTask(selected);
-                        },
-                        onClose: () => setState(() => _selectedTaskId = null),
-                      ),
-                  ],
+                      if (details)
+                        TaskDetailPane(
+                          controller: widget.controller,
+                          task: selected,
+                          onEdit: () {
+                            if (selected != null) _editTask(selected);
+                          },
+                          onDelete: () {
+                            if (selected != null) _deleteTask(selected);
+                          },
+                          onClose: () => setState(() {
+                            _selectedTaskId = null;
+                            _detailVisible = false;
+                          }),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-              floatingActionButton: !wide && _taskPage
-                  ? FloatingActionButton.extended(
-                      onPressed: widget.controller.editing ? null : _newTask,
-                      icon: const Icon(Icons.add_rounded),
-                      label: const Text('新建待办'),
-                    )
-                  : null,
-              bottomNavigationBar: wide
-                  ? null
-                  : NavigationBar(
-                      height: 68,
-                      selectedIndex: _page == 5 ? 0 : _page,
-                      onDestinationSelected: _selectPage,
-                      destinations: const [
-                        NavigationDestination(
-                          icon: Icon(Icons.checklist_rounded),
-                          label: '待办',
-                        ),
-                        NavigationDestination(
-                          icon: Icon(Icons.wb_sunny_outlined),
-                          label: '今天',
-                        ),
-                        NavigationDestination(
-                          icon: Icon(Icons.task_alt_rounded),
-                          label: '已完成',
-                        ),
-                        NavigationDestination(
-                          icon: Icon(Icons.calendar_month_outlined),
-                          label: '日历',
-                        ),
-                        NavigationDestination(
-                          icon: Icon(Icons.settings_outlined),
-                          label: '设置',
-                        ),
-                      ],
-                    ),
-            );
-          },
+                floatingActionButton: !wide && _taskPage
+                    ? FloatingActionButton.extended(
+                        onPressed: widget.controller.editing ? null : _newTask,
+                        icon: const Icon(Icons.add_rounded),
+                        label: const Text('新建待办'),
+                      )
+                    : null,
+                bottomNavigationBar: wide
+                    ? null
+                    : NavigationBar(
+                        height: 68,
+                        selectedIndex: _page == 5 ? 0 : _page,
+                        onDestinationSelected: _selectPage,
+                        destinations: const [
+                          NavigationDestination(
+                            icon: Icon(Icons.checklist_rounded),
+                            label: '待办',
+                          ),
+                          NavigationDestination(
+                            icon: Icon(Icons.wb_sunny_outlined),
+                            label: '今天',
+                          ),
+                          NavigationDestination(
+                            icon: Icon(Icons.task_alt_rounded),
+                            label: '已完成',
+                          ),
+                          NavigationDestination(
+                            icon: Icon(Icons.calendar_month_outlined),
+                            label: '日历',
+                          ),
+                          NavigationDestination(
+                            icon: Icon(Icons.settings_outlined),
+                            label: '设置',
+                          ),
+                        ],
+                      ),
+              );
+            },
+          ),
         ),
-      ),
       ),
     );
   }
@@ -993,12 +1002,14 @@ class _HomeScreenState extends State<HomeScreen>
                 icon: const Icon(Icons.tune_rounded, size: 20),
                 onSelected: (value) => setState(() {
                   if (value.startsWith('sort:')) _sort = value.substring(5);
-                  if (value.startsWith('priority:'))
+                  if (value.startsWith('priority:')) {
                     _priorityFilter = int.tryParse(value.substring(9));
-                  if (value.startsWith('list:'))
+                  }
+                  if (value.startsWith('list:')) {
                     _selectedList = value.length == 5
                         ? null
                         : value.substring(5);
+                  }
                 }),
                 itemBuilder: (context) => [
                   const PopupMenuItem(

@@ -35,12 +35,13 @@ Future<void> _screen(
   AppController controller, {
   bool matrix = false,
   bool phone = false,
+  Size? size,
   ValueChanged<Task>? onEdit,
 }) async {
   tester.view.devicePixelRatio = 1;
-  tester.view.physicalSize = phone
+  tester.view.physicalSize = size ?? (phone
       ? const Size(390, 844)
-      : const Size(1200, 860);
+      : const Size(1200, 860));
   addTearDown(tester.view.resetDevicePixelRatio);
   addTearDown(tester.view.resetPhysicalSize);
   await tester.pumpWidget(
@@ -154,6 +155,44 @@ void main() {
         ),
         findsOneWidget,
       );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Windows horizontal wheel and scrollbar thumb share the real board position',
+    (tester) async {
+      final controller = await _controller();
+      addTearDown(controller.dispose);
+      await controller.saveTask(const TaskDraft(title: '滚动到右侧', priority: 2));
+      await _screen(tester, controller, size: const Size(700, 860));
+      final scroll = tester.widget<SingleChildScrollView>(
+        find.byKey(const ValueKey('priority-board-scroll')));
+      final bar = tester.widget<Scrollbar>(
+        find.byKey(const ValueKey('priority-board-scrollbar')));
+      expect(identical(scroll.controller, bar.controller), isTrue);
+      final position = scroll.controller!.position;
+      expect(position.maxScrollExtent, greaterThan(0));
+      final viewport = tester.getRect(find.byKey(const ValueKey('priority-board-scroll')));
+      await tester.sendEventToBinding(PointerScrollEvent(
+        position: viewport.center, scrollDelta: const Offset(20, 0),
+        kind: PointerDeviceKind.mouse));
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(position.pixels, greaterThan(0));
+      expect(tester.takeException(), isNull);
+      final before = position.pixels;
+      final gesture = await tester.startGesture(
+        Offset(viewport.left + viewport.width * .3, viewport.bottom - 3),
+        kind: PointerDeviceKind.mouse);
+      await gesture.moveBy(const Offset(100, 0));
+      await tester.pump(const Duration(milliseconds: 40));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(position.pixels, greaterThan(before));
+      expect(controller.tasks.single.priority, 2);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     },
   );

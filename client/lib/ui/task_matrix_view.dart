@@ -194,6 +194,7 @@ class TaskMatrixView extends StatelessWidget {
                     )
                   : ListView.builder(
                       key: ValueKey('matrix-list-${quadrant.name}'),
+                      primary: false,
                       padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
                       itemCount: entries.length,
                       itemBuilder: (context, index) {

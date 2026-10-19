@@ -49,15 +49,17 @@ List<Task> queryWorkbenchTasks(
   final text = query.trim().toLowerCase();
   final result = tasks.where((task) {
     if (task.deleted ||
-        (view == SmartTaskView.completed ? !task.completed : task.completed))
+        (view == SmartTaskView.completed ? !task.completed : task.completed)) {
       return false;
+    }
     if (listName != null && task.listName != listName) return false;
     if (priority != null && task.priority != priority) return false;
     if (text.isNotEmpty &&
         !'${task.title}\n${task.note}\n${task.listName}'.toLowerCase().contains(
           text,
-        ))
+        )) {
       return false;
+    }
     return switch (view) {
       SmartTaskView.all || SmartTaskView.completed => true,
       SmartTaskView.inbox => const {
@@ -102,10 +104,12 @@ WorkbenchDueBucket workbenchDueBucket(Task task, {DateTime? now}) {
   final today = dateKey(day);
   if (due.compareTo(today) < 0) return WorkbenchDueBucket.overdue;
   if (due == today) return WorkbenchDueBucket.today;
-  if (due == dateKey(DateTime(day.year, day.month, day.day + 1)))
+  if (due == dateKey(DateTime(day.year, day.month, day.day + 1))) {
     return WorkbenchDueBucket.tomorrow;
-  if (due.compareTo(dateKey(DateTime(day.year, day.month, day.day + 6))) <= 0)
+  }
+  if (due.compareTo(dateKey(DateTime(day.year, day.month, day.day + 6))) <= 0) {
     return WorkbenchDueBucket.nextSevenDays;
+  }
   return WorkbenchDueBucket.later;
 }
 

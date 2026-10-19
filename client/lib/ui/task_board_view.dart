@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../app_controller.dart';
 import '../sync_core.dart';
 
-class TaskBoardView extends StatelessWidget {
+class TaskBoardView extends StatefulWidget {
   const TaskBoardView({
     super.key,
     required this.controller,
@@ -16,13 +16,26 @@ class TaskBoardView extends StatelessWidget {
   final List<Task> tasks;
   final ValueChanged<Task> onEdit;
 
+  @override
+  State<TaskBoardView> createState() => _TaskBoardViewState();
+}
+
+class _TaskBoardViewState extends State<TaskBoardView> {
+  final _horizontal = ScrollController();
+
+  @override
+  void dispose() {
+    _horizontal.dispose();
+    super.dispose();
+  }
+
   Future<void> _move(BuildContext context, String id, int priority) async {
-    if (!canMoveWorkbenchTask(controller, id)) return;
-    final saved = await controller.setTaskPlacement(id, priority: priority, requireIncomplete: true);
+    if (!canMoveWorkbenchTask(widget.controller, id)) return;
+    final saved = await widget.controller.setTaskPlacement(id, priority: priority, requireIncomplete: true);
     if (!context.mounted || saved) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(controller.error ?? '暂时无法移动，请稍后重试')));
+    ).showSnackBar(SnackBar(content: Text(widget.controller.error ?? '暂时无法移动，请稍后重试')));
   }
 
   @override
@@ -43,8 +56,11 @@ class TaskBoardView extends StatelessWidget {
             builder: (context, constraints) {
               final width = math.max(276.0, (constraints.maxWidth - 56) / 3);
               return Scrollbar(
+                key: const ValueKey('priority-board-scrollbar'),
+                controller: _horizontal,
                 child: SingleChildScrollView(
                   key: const ValueKey('priority-board-scroll'),
+                  controller: _horizontal,
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.fromLTRB(20, 0, 8, 16),
                   child: Row(
@@ -67,7 +83,7 @@ class TaskBoardView extends StatelessWidget {
   }
 
   Widget _column(BuildContext context, int priority) {
-    final entries = tasks
+    final entries = widget.tasks
         .where((task) => !task.deleted && task.priority == priority)
         .toList();
     final colors = Theme.of(context).colorScheme;
@@ -75,7 +91,7 @@ class TaskBoardView extends StatelessWidget {
     return DragTarget<String>(
       key: ValueKey('board-drop-$priority'),
       onWillAcceptWithDetails: (details) =>
-          canMoveWorkbenchTask(controller, details.data),
+          canMoveWorkbenchTask(widget.controller, details.data),
       onAcceptWithDetails: (details) => _move(context, details.data, priority),
       builder: (context, candidates, rejected) => AnimatedContainer(
         duration: const Duration(milliseconds: 160),
@@ -135,14 +151,15 @@ class TaskBoardView extends StatelessWidget {
                     )
                   : ListView.builder(
                       key: ValueKey('board-list-$priority'),
+                      primary: false,
                       padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
                       itemCount: entries.length,
                       itemBuilder: (context, index) {
                         final task = entries[index];
                         final card = WorkbenchTaskCard(
                           task: task,
-                          controller: controller,
-                          onEdit: onEdit,
+                          controller: widget.controller,
+                          onEdit: widget.onEdit,
                           menuItems: [
                             for (var value = 0; value <= 2; value++)
                               PopupMenuItem(
@@ -157,7 +174,7 @@ class TaskBoardView extends StatelessWidget {
                         );
                         return draggableWorkbenchTask(
                           context,
-                          controller,
+                          widget.controller,
                           task,
                           card,
                         );
@@ -278,8 +295,9 @@ class WorkbenchTaskCard extends StatelessWidget {
                     onChanged: controller.editing || conflict
                         ? null
                         : (value) {
-                            if (value != null)
+                            if (value != null) {
                               controller.setCompleted(task.id, value);
+                            }
                           },
                   ),
                   Expanded(

@@ -162,8 +162,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
     void move(ScrollController controller, double delta) {
       if (delta == 0 ||
           !controller.hasClients ||
-          controller.positions.length != 1)
+          controller.positions.length != 1) {
         return;
+      }
       final position = controller.position;
       controller.jumpTo(
         (position.pixels + delta).clamp(

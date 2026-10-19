@@ -405,8 +405,9 @@ class SyncEngine {
     draft.validate();
     if (draft.listName.trim() == task.listName &&
         draft.priority == task.priority &&
-        draft.dueDate == task.dueDate)
+        draft.dueDate == task.dueDate) {
       return;
+    }
     await _saveDraft(draft, id: task.id);
   }
 
@@ -555,8 +556,9 @@ class SyncEngine {
         if (result['task'] != null) {
           final task = Task.fromJson(_map(result['task']));
           final operation = batch.firstWhere((op) => op['op_id'] == opId);
-          if (task.id != operation['task_id'])
+          if (task.id != operation['task_id']) {
             throw StateError('NAS 返回了错误的待办记录');
+          }
         }
       }
       if (seen.length != sentIds.length) throw StateError('NAS 未确认全部修改，稍后重试');
@@ -657,8 +659,9 @@ class SyncEngine {
 
   void _acceptRemote(Task remote, {bool force = false}) {
     final cached = _tasks[remote.id];
-    if (force || cached == null || remote.version >= cached.version)
+    if (force || cached == null || remote.version >= cached.version) {
       _tasks[remote.id] = remote;
+    }
   }
 
   Future<void> resolveConflict(

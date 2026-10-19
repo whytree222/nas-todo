@@ -109,6 +109,12 @@ void main() {
       await tester.tap(find.byKey(ValueKey('task-detail-${task.id}')));
       await tester.pumpAndSettle();
       expect(find.text('待办详情'), findsOneWidget);
+      await tester.tap(find.byTooltip('关闭详情'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TaskDetailPane), findsNothing);
+      await tester.tap(find.byKey(ValueKey('task-detail-${task.id}')));
+      await tester.pumpAndSettle();
+      expect(find.byType(TaskDetailPane), findsOneWidget);
       await tester.tap(find.text('编辑待办'));
       await tester.pumpAndSettle();
       await tester.enterText(
@@ -270,10 +276,11 @@ void main() {
         await _seed(controller);
         final font = await _loadPreviewFonts(tester);
         var theme = buildTodoTheme(TodoThemeColor.green);
-        if (font != null)
+        if (font != null) {
           theme = theme.copyWith(
             textTheme: theme.textTheme.apply(fontFamily: font),
           );
+        }
         await tester.pumpWidget(
           RepaintBoundary(
             key: const ValueKey('workbench-preview'),

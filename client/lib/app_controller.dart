@@ -299,8 +299,9 @@ class AppController extends ChangeNotifier {
   /// actions queued by Android widgets before the main screen exists.
   Future<DailyCelebration?> takeDailyCelebration() async {
     await _loadCelebration();
-    if (_disposed || _claimingCelebration || _pendingCelebration == null)
+    if (_disposed || _claimingCelebration || _pendingCelebration == null) {
       return null;
+    }
     _claimingCelebration = true;
     final pending = _pendingCelebration!;
     try {
