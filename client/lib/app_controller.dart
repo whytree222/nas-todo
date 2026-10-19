@@ -15,20 +15,31 @@ import 'task_dates.dart';
 
 /// Keeps local edits available even when the NAS cannot be reached.
 class AppController extends ChangeNotifier {
-  AppController._(this.engine, this._transport, this._configFile, this._vault,
-      this._appearanceStore, this._celebrationStore, this._clock);
+  AppController._(
+    this.engine,
+    this._transport,
+    this._configFile,
+    this._vault,
+    this._appearanceStore,
+    this._celebrationStore,
+    this._clock,
+  );
 
   @visibleForTesting
-  factory AppController.forTesting(SyncEngine engine, {AppearanceStore? appearanceStore,
-      CelebrationStore? celebrationStore, DateTime Function()? clock}) => AppController._(
-        engine,
-        HttpSyncTransport('', ''),
-        File('unused-test-config.json'),
-        const FlutterSecureStorage(),
-        appearanceStore ?? MemoryAppearanceStore(),
-        celebrationStore ?? MemoryCelebrationStore(),
-        clock ?? DateTime.now,
-      );
+  factory AppController.forTesting(
+    SyncEngine engine, {
+    AppearanceStore? appearanceStore,
+    CelebrationStore? celebrationStore,
+    DateTime Function()? clock,
+  }) => AppController._(
+    engine,
+    HttpSyncTransport('', ''),
+    File('unused-test-config.json'),
+    const FlutterSecureStorage(),
+    appearanceStore ?? MemoryAppearanceStore(),
+    celebrationStore ?? MemoryCelebrationStore(),
+    clock ?? DateTime.now,
+  );
 
   final SyncEngine engine;
   final HttpSyncTransport _transport;
@@ -63,7 +74,10 @@ class AppController extends ChangeNotifier {
     await directory.create(recursive: true);
     final transport = HttpSyncTransport('', '');
     final controller = AppController._(
-      SyncEngine(FileDataStore(File('${directory.path}/tasks.json')), transport),
+      SyncEngine(
+        FileDataStore(File('${directory.path}/tasks.json')),
+        transport,
+      ),
       transport,
       File('${directory.path}/config.json'),
       const FlutterSecureStorage(),
@@ -107,8 +121,9 @@ class AppController extends ChangeNotifier {
     await _loadCelebration();
     try {
       if (await _configFile.exists()) {
-        final config = jsonDecode(await _configFile.readAsString())
-            as Map<String, dynamic>;
+        final config = jsonDecode(
+          await _configFile.readAsString(),
+        ) as Map<String, dynamic>;
         _serverUrl = (config['server_url'] as String?) ?? '';
       }
       _token = await _vault.read(key: _tokenKey) ?? '';
@@ -128,7 +143,9 @@ class AppController extends ChangeNotifier {
 
   Future<void> _loadAppearance() async {
     try {
-      _appearance = AppearancePreferences.fromJson(await _appearanceStore.read());
+      _appearance = AppearancePreferences.fromJson(
+        await _appearanceStore.read(),
+      );
       _appearanceError = null;
     } catch (error) {
       _appearanceError = '主题设置读取失败，已使用默认颜色：${_messageFor(error)}';
@@ -141,7 +158,10 @@ class AppController extends ChangeNotifier {
     _notify();
   }
 
-  Future<bool> setAppearance(TodoThemeColor appTheme, TodoThemeColor? widgetTheme) async {
+  Future<bool> setAppearance(
+    TodoThemeColor appTheme,
+    TodoThemeColor? widgetTheme,
+  ) async {
     if (_disposed || _savingAppearance) return false;
     if (_appearance.appTheme == appTheme &&
         _appearance.widgetTheme == widgetTheme &&
@@ -151,7 +171,10 @@ class AppController extends ChangeNotifier {
     _savingAppearance = true;
     _notify();
     try {
-      final next = AppearancePreferences(appTheme: appTheme, widgetTheme: widgetTheme);
+      final next = AppearancePreferences(
+        appTheme: appTheme,
+        widgetTheme: widgetTheme,
+      );
       await _appearanceStore.write(next.toJson());
       _appearance = next;
       _appearanceError = null;
@@ -243,15 +266,21 @@ class AppController extends ChangeNotifier {
 
   Future<void> _writeCelebration(DailyCelebration? pending) {
     final state = _celebrationState(pending);
-    final write = _celebrationWriteTail.then((_) => _celebrationStore.write(state));
+    final write = _celebrationWriteTail.then(
+      (_) => _celebrationStore.write(state),
+    );
     // A failed preference flush must not poison later independent daily writes.
-    _celebrationWriteTail = write.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    _celebrationWriteTail = write.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
     return write;
   }
 
   Future<void> _queueCelebration(DailyCelebration celebration) async {
     await _loadCelebration();
-    if (_disposed || !_celebrationReadable ||
+    if (_disposed ||
+        !_celebrationReadable ||
         _celebratedDays.contains(celebration.day)) {
       return;
     }
@@ -270,7 +299,8 @@ class AppController extends ChangeNotifier {
   /// actions queued by Android widgets before the main screen exists.
   Future<DailyCelebration?> takeDailyCelebration() async {
     await _loadCelebration();
-    if (_disposed || _claimingCelebration || _pendingCelebration == null) return null;
+    if (_disposed || _claimingCelebration || _pendingCelebration == null)
+      return null;
     _claimingCelebration = true;
     final pending = _pendingCelebration!;
     try {
@@ -278,11 +308,16 @@ class AppController extends ChangeNotifier {
       if (identical(_pendingCelebration, pending)) _pendingCelebration = null;
       // Another user action or midnight may occur while the preference flushes.
       final today = dateKey(_clock());
-      final scheduled = tasks.where((task) => !task.deleted && task.dueDate == today).toList();
-      final valid = pending.day == today && scheduled.isNotEmpty &&
+      final scheduled = tasks
+          .where((task) => !task.deleted && task.dueDate == today)
+          .toList();
+      final valid =
+          pending.day == today &&
+          scheduled.isNotEmpty &&
           scheduled.every((task) => task.completed);
       return !_disposed && valid
-          ? DailyCelebration(day: pending.day, taskCount: scheduled.length) : null;
+          ? DailyCelebration(day: pending.day, taskCount: scheduled.length)
+          : null;
     } catch (_) {
       // Retry only on a future launch, never spin on every controller rebuild.
       if (identical(_pendingCelebration, pending)) _pendingCelebration = null;
@@ -302,6 +337,37 @@ class AppController extends ChangeNotifier {
   Future<bool> scheduleTask(String id, String date) async {
     return _edit(() => engine.scheduleTask(id, date));
   }
+
+  Future<bool> setTaskPlacement(
+    String id, {
+    String? listName,
+    int? priority,
+    String? dueDate,
+    bool clearDueDate = false,
+    bool requireIncomplete = false,
+  }) => _edit(
+    () => engine.setTaskPlacement(
+      id,
+      listName: listName,
+      priority: priority,
+      dueDate: dueDate,
+      clearDueDate: clearDueDate,
+      requireIncomplete: requireIncomplete,
+    ),
+  );
+
+  Future<bool> setTaskQuadrant(
+    String id, {
+    required bool important,
+    required bool urgent,
+  }) => _edit(
+    () => engine.setTaskQuadrant(
+      id,
+      important: important,
+      urgent: urgent,
+      today: dateKey(_clock()),
+    ),
+  );
 
   Future<bool> deleteTask(String id) async {
     return _edit(() => engine.deleteTask(id));

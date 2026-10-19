@@ -171,7 +171,7 @@ void main() {
     final controller = await _controller();
     addTearDown(controller.dispose);
     await tester.pumpWidget(PrivateTodoApp(controller: controller));
-    await tester.tap(find.text('日历').last);
+    await tester.tap(find.byTooltip('日历'));
     await tester.pumpAndSettle();
     final now = DateTime.now();
     final target = DateTime(now.year, now.month, 15);

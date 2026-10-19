@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+
 import 'achievement_core.dart';
 
 /// Storage must finish durably before its returned future completes.
@@ -48,13 +49,21 @@ class TaskDraft {
   });
 
   factory TaskDraft.fromTask(Task task) => TaskDraft(
-    title: task.title, note: task.note, listName: task.listName,
-    dueDate: task.dueDate, priority: task.priority, completed: task.completed,
+    title: task.title,
+    note: task.note,
+    listName: task.listName,
+    dueDate: task.dueDate,
+    priority: task.priority,
+    completed: task.completed,
   );
 
   Map<String, dynamic> toJson() => {
-    'title': title.trim(), 'note': note, 'list_name': listName.trim(),
-    'due_date': dueDate, 'priority': priority, 'completed': completed,
+    'title': title.trim(),
+    'note': note,
+    'list_name': listName.trim(),
+    'due_date': dueDate,
+    'priority': priority,
+    'completed': completed,
   };
 
   void validate() {
@@ -68,8 +77,10 @@ class TaskDraft {
     if (priority < 0 || priority > 2) throw ArgumentError('优先级无效');
     if (dueDate != null) {
       final date = DateTime.tryParse(dueDate!);
-      if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dueDate!) || date == null ||
-          date.year < 1 || _dateString(date) != dueDate) {
+      if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dueDate!) ||
+          date == null ||
+          date.year < 1 ||
+          _dateString(date) != dueDate) {
         throw ArgumentError('截止日期无效');
       }
     }
@@ -94,33 +105,64 @@ class Task {
   final String updatedAt;
   final int changeSeq;
   const Task({
-    required this.id, required this.title, this.note = '',
-    this.listName = '收件箱', this.dueDate, this.priority = 0,
-    this.completed = false, this.deleted = false, this.version = 0,
-    this.updatedAt = '', this.changeSeq = 0,
+    required this.id,
+    required this.title,
+    this.note = '',
+    this.listName = '收件箱',
+    this.dueDate,
+    this.priority = 0,
+    this.completed = false,
+    this.deleted = false,
+    this.version = 0,
+    this.updatedAt = '',
+    this.changeSeq = 0,
   });
 
   factory Task.fromJson(Map<String, dynamic> json) => Task(
-    id: json['id'] as String, title: json['title'] as String,
-    note: json['note'] as String, listName: json['list_name'] as String,
-    dueDate: json['due_date'] as String?, priority: json['priority'] as int,
-    completed: json['completed'] as bool, deleted: json['deleted'] as bool,
-    version: json['version'] as int, updatedAt: json['updated_at'] as String,
+    id: json['id'] as String,
+    title: json['title'] as String,
+    note: json['note'] as String,
+    listName: json['list_name'] as String,
+    dueDate: json['due_date'] as String?,
+    priority: json['priority'] as int,
+    completed: json['completed'] as bool,
+    deleted: json['deleted'] as bool,
+    version: json['version'] as int,
+    updatedAt: json['updated_at'] as String,
     changeSeq: json['change_seq'] as int,
   );
 
   Map<String, dynamic> toJson() => {
-    'id': id, 'title': title, 'note': note, 'list_name': listName,
-    'due_date': dueDate, 'priority': priority, 'completed': completed,
-    'deleted': deleted, 'version': version, 'updated_at': updatedAt,
+    'id': id,
+    'title': title,
+    'note': note,
+    'list_name': listName,
+    'due_date': dueDate,
+    'priority': priority,
+    'completed': completed,
+    'deleted': deleted,
+    'version': version,
+    'updated_at': updatedAt,
     'change_seq': changeSeq,
   };
 
-  Task copyWith({bool? completed, bool? deleted, int? version, int? changeSeq}) => Task(
-    id: id, title: title, note: note, listName: listName, dueDate: dueDate,
-    priority: priority, completed: completed ?? this.completed,
-    deleted: deleted ?? this.deleted, version: version ?? this.version,
-    updatedAt: updatedAt, changeSeq: changeSeq ?? this.changeSeq,
+  Task copyWith({
+    bool? completed,
+    bool? deleted,
+    int? version,
+    int? changeSeq,
+  }) => Task(
+    id: id,
+    title: title,
+    note: note,
+    listName: listName,
+    dueDate: dueDate,
+    priority: priority,
+    completed: completed ?? this.completed,
+    deleted: deleted ?? this.deleted,
+    version: version ?? this.version,
+    updatedAt: updatedAt,
+    changeSeq: changeSeq ?? this.changeSeq,
   );
 }
 
@@ -130,7 +172,9 @@ class SyncConflict {
   final Task? remote;
   const SyncConflict({required this.taskId, this.local, this.remote});
   Map<String, dynamic> toJson() => {
-    'task_id': taskId, 'local': local?.toJson(), 'remote': remote?.toJson(),
+    'task_id': taskId,
+    'local': local?.toJson(),
+    'remote': remote?.toJson(),
   };
   factory SyncConflict.fromJson(Map<String, dynamic> json) => SyncConflict(
     taskId: json['task_id'] as String,
@@ -139,14 +183,15 @@ class SyncConflict {
   );
 }
 
-Map<String, dynamic> _map(Object? value) => Map<String, dynamic>.from(value as Map);
+Map<String, dynamic> _map(Object? value) =>
+    Map<String, dynamic>.from(value as Map);
 
 /// Personal offline-first sync. Writes and syncs are serialized so an in-flight
 /// acknowledgement cannot erase a concurrent local edit. Conflicts are durable.
 /// The before state is read inside the sync queue, and tasks follow durable save.
 class TaskCompletionChange {
   TaskCompletionChange({required this.before, required List<Task> tasks})
-      : tasks = List.unmodifiable(tasks);
+    : tasks = List.unmodifiable(tasks);
   final Task before;
   final List<Task> tasks;
 }
@@ -167,7 +212,8 @@ class SyncEngine {
   bool _achievementsSupported = false;
 
   SyncEngine(this.store, this.transport);
-  List<Task> get tasks => List.unmodifiable(_tasks.values.where((t) => !t.deleted));
+  List<Task> get tasks =>
+      List.unmodifiable(_tasks.values.where((t) => !t.deleted));
   List<SyncConflict> get conflicts => List.unmodifiable(_conflicts.values);
   int get pendingCount => _operations.length;
   DateTime? get lastSyncedAt => _lastSyncedAt;
@@ -192,31 +238,41 @@ class SyncEngine {
   }
 
   Map<String, dynamic> _state() => {
-    'schema': 1, 'instance_id': _instanceId, 'cursor': _cursor,
+    'schema': 1,
+    'instance_id': _instanceId,
+    'cursor': _cursor,
     'tasks': _tasks.values.map((t) => t.toJson()).toList(),
     'operations': _operations,
     'attempted_ids': _attemptedIds.toList(),
     'conflicts': _conflicts.values.map((c) => c.toJson()).toList(),
     'last_synced_at': _lastSyncedAt?.toUtc().toIso8601String(),
-    'achievement': _achievement?.toJson(), 'achievements_supported': _achievementsSupported,
+    'achievement': _achievement?.toJson(),
+    'achievements_supported': _achievementsSupported,
   };
 
   void _restore(Map<String, dynamic> state) {
     if (state['schema'] != 1) throw StateError('本地数据版本不受支持');
-    _achievement = state['achievement'] == null ? null : AchievementState.fromJson(_map(state['achievement']));
+    _achievement = state['achievement'] == null
+        ? null
+        : AchievementState.fromJson(_map(state['achievement']));
     _achievementsSupported = state['achievements_supported'] as bool? ?? false;
     _instanceId = state['instance_id'] as String?;
     _cursor = state['cursor'] as int;
     if (_cursor < 0) throw StateError('本地同步记录损坏');
     _lastSyncedAt = state['last_synced_at'] == null
-        ? null : DateTime.parse(state['last_synced_at'] as String);
+        ? null
+        : DateTime.parse(state['last_synced_at'] as String);
     _tasks.clear();
     for (final raw in state['tasks'] as List) {
       final task = Task.fromJson(_map(raw));
       _tasks[task.id] = task;
     }
-    _operations..clear()..addAll((state['operations'] as List).map(_map));
-    _attemptedIds..clear()..addAll((state['attempted_ids'] as List? ?? []).cast<String>());
+    _operations
+      ..clear()
+      ..addAll((state['operations'] as List).map(_map));
+    _attemptedIds
+      ..clear()
+      ..addAll((state['attempted_ids'] as List? ?? []).cast<String>());
     _conflicts.clear();
     for (final raw in state['conflicts'] as List) {
       final conflict = SyncConflict.fromJson(_map(raw));
@@ -236,20 +292,29 @@ class SyncEngine {
     }
   }
 
-  Future<void> saveTask(TaskDraft draft, {String? id}) => _serial(() => _saveDraft(draft, id: id));
+  Future<void> saveTask(TaskDraft draft, {String? id}) =>
+      _serial(() => _saveDraft(draft, id: id));
 
-  Future<TaskCompletionChange> setCompleted(String id, bool completed) => _serial(() async {
-    _checkLoaded();
-    final task = _tasks[id];
-    if (task == null || task.deleted) throw StateError('这条待办已删除');
-    // Change only completion, keeping content freshly pulled by a preceding
-    // in-flight sync. A checkbox must never write an old title or old note.
-    await _saveDraft(TaskDraft(
-      title: task.title, note: task.note, listName: task.listName,
-      dueDate: task.dueDate, priority: task.priority, completed: completed,
-    ), id: id);
-    return TaskCompletionChange(before: task, tasks: tasks);
-  });
+  Future<TaskCompletionChange> setCompleted(String id, bool completed) =>
+      _serial(() async {
+        _checkLoaded();
+        final task = _tasks[id];
+        if (task == null || task.deleted) throw StateError('这条待办已删除');
+        // Change only completion, keeping content freshly pulled by a preceding
+        // in-flight sync. A checkbox must never write an old title or old note.
+        await _saveDraft(
+          TaskDraft(
+            title: task.title,
+            note: task.note,
+            listName: task.listName,
+            dueDate: task.dueDate,
+            priority: task.priority,
+            completed: completed,
+          ),
+          id: id,
+        );
+        return TaskCompletionChange(before: task, tasks: tasks);
+      });
 
   Future<void> scheduleTask(String id, String date) => _serial(() async {
     _checkLoaded();
@@ -260,11 +325,90 @@ class SyncEngine {
     if (task.dueDate != null) throw StateError('这条待办已有日期，请刷新后重试');
     // Read inside the sync queue: dragging changes only the date, never content
     // or completion freshly received from the NAS while the drag was underway.
-    await _saveDraft(TaskDraft(
-      title: task.title, note: task.note, listName: task.listName,
-      dueDate: date, priority: task.priority, completed: task.completed,
-    ), id: id);
+    await _saveDraft(
+      TaskDraft(
+        title: task.title,
+        note: task.note,
+        listName: task.listName,
+        dueDate: date,
+        priority: task.priority,
+        completed: task.completed,
+      ),
+      id: id,
+    );
   });
+
+  Future<void> setTaskPlacement(
+    String id, {
+    String? listName,
+    int? priority,
+    String? dueDate,
+    bool clearDueDate = false,
+    bool requireIncomplete = false,
+  }) => _serial(() async {
+    final task = _placementTask(id);
+    if (requireIncomplete && task.completed) throw StateError('已完成的待办不能移动');
+    if (dueDate != null && clearDueDate) throw ArgumentError('日期不能同时设置和清除');
+    await _placeTask(
+      task,
+      listName: listName,
+      priority: priority,
+      dueDate: dueDate,
+      clearDueDate: clearDueDate,
+    );
+  });
+
+  Future<void> setTaskQuadrant(
+    String id, {
+    required bool important,
+    required bool urgent,
+    required String today,
+  }) => _serial(() async {
+    // Resolve the quadrant intent after any pending NAS pull. Computing fields
+    // from a drag snapshot could clear a future date just received from the NAS.
+    final task = _placementTask(id);
+    if (task.completed) throw StateError('已完成的待办不能调整四象限');
+    TaskDraft(title: task.title, dueDate: today).validate();
+    final isUrgent =
+        task.dueDate != null && task.dueDate!.compareTo(today) <= 0;
+    await _placeTask(
+      task,
+      priority: important ? (task.priority == 2 ? 2 : 1) : 0,
+      dueDate: urgent && !isUrgent ? today : null,
+      clearDueDate: !urgent && isUrgent,
+    );
+  });
+
+  Task _placementTask(String id) {
+    _checkLoaded();
+    final task = _tasks[id];
+    if (task == null || task.deleted) throw StateError('这条待办已删除');
+    if (_conflicts.containsKey(id)) throw StateError('请先处理这条待办的同步冲突');
+    return task;
+  }
+
+  Future<void> _placeTask(
+    Task task, {
+    String? listName,
+    int? priority,
+    String? dueDate,
+    bool clearDueDate = false,
+  }) async {
+    final draft = TaskDraft(
+      title: task.title,
+      note: task.note,
+      listName: listName ?? task.listName,
+      priority: priority ?? task.priority,
+      dueDate: clearDueDate ? null : dueDate ?? task.dueDate,
+      completed: task.completed,
+    );
+    draft.validate();
+    if (draft.listName.trim() == task.listName &&
+        draft.priority == task.priority &&
+        draft.dueDate == task.dueDate)
+      return;
+    await _saveDraft(draft, id: task.id);
+  }
 
   Future<void> _saveDraft(TaskDraft draft, {String? id}) async {
     _checkLoaded();
@@ -273,14 +417,21 @@ class SyncEngine {
     if (_conflicts.containsKey(taskId)) throw StateError('请先处理这条待办的同步冲突');
     final old = _tasks[taskId];
     if (id != null && (old == null || old.deleted)) throw StateError('这条待办已删除');
-    final queued = _operations.where((op) => op['task_id'] == taskId).firstOrNull;
+    final queued = _operations
+        .where((op) => op['task_id'] == taskId)
+        .firstOrNull;
     final base = queued?['base_version'] as int? ?? old?.version ?? 0;
     final data = draft.toJson();
     final task = Task(
-      id: taskId, title: data['title'] as String, note: draft.note,
-      listName: data['list_name'] as String, dueDate: draft.dueDate,
-      priority: draft.priority, completed: draft.completed,
-      version: old?.version ?? 0, changeSeq: old?.changeSeq ?? 0,
+      id: taskId,
+      title: data['title'] as String,
+      note: draft.note,
+      listName: data['list_name'] as String,
+      dueDate: draft.dueDate,
+      priority: draft.priority,
+      completed: draft.completed,
+      version: old?.version ?? 0,
+      changeSeq: old?.changeSeq ?? 0,
       updatedAt: DateTime.now().toUtc().toIso8601String(),
     );
     await _commit(() {
@@ -291,13 +442,16 @@ class SyncEngine {
   }
 
   Map<String, dynamic> _operation(Task task, int base, String action) => {
-    'op_id': newId(), 'task_id': task.id, 'base_version': base,
+    'op_id': newId(),
+    'task_id': task.id,
+    'base_version': base,
     'action': action,
     'data': TaskDraft.fromTask(task).toJson(),
   };
 
-  void _removeUnsent(String taskId) => _operations.removeWhere((op) =>
-      op['task_id'] == taskId && !_attemptedIds.contains(op['op_id']));
+  void _removeUnsent(String taskId) => _operations.removeWhere(
+    (op) => op['task_id'] == taskId && !_attemptedIds.contains(op['op_id']),
+  );
 
   void _removeTaskOperations(String taskId) {
     for (final op in _operations.where((op) => op['task_id'] == taskId)) {
@@ -316,7 +470,9 @@ class SyncEngine {
     await _commit(() {
       // A never-sent offline creation can be cancelled entirely. Once attempted,
       // preserve it unchanged, as the NAS may have committed a lost response.
-      if (base == 0 && queued != null && !_attemptedIds.contains(queued['op_id'])) {
+      if (base == 0 &&
+          queued != null &&
+          !_attemptedIds.contains(queued['op_id'])) {
         _tasks.remove(id);
         _removeTaskOperations(id);
         return;
@@ -349,42 +505,58 @@ class SyncEngine {
         throw StateError('本地修改超过单次同步限制，请保留数据文件并检查内容');
       }
       if (batch.any((op) => !_attemptedIds.contains(op['op_id']))) {
-        await _commit(() => _attemptedIds.addAll(batch.map((op) => op['op_id'] as String)));
+        await _commit(
+          () => _attemptedIds.addAll(batch.map((op) => op['op_id'] as String)),
+        );
       }
       var requestCursor = _cursor;
       Map<String, dynamic> response;
       try {
         response = await transport.sync({
-          'instance_id': _instanceId, 'cursor': requestCursor, 'operations': batch,
+          'instance_id': _instanceId,
+          'cursor': requestCursor,
+          'operations': batch,
         });
       } on SyncServerException catch (error) {
         if (error.code != 'future_cursor' || _instanceId == null) rethrow;
         requestCursor = 0;
         response = await transport.sync({
-          'instance_id': _instanceId, 'cursor': 0, 'operations': batch,
+          'instance_id': _instanceId,
+          'cursor': 0,
+          'operations': batch,
         });
       }
       final instance = response['instance_id'] as String;
       final cursor = response['cursor'] as int;
-      if (instance.isEmpty || (_instanceId != null && instance != _instanceId)) {
-        throw SyncServerException('instance_mismatch', 'NAS 数据库与已绑定的数据库不同，请检查服务地址');
+      if (instance.isEmpty ||
+          (_instanceId != null && instance != _instanceId)) {
+        throw SyncServerException(
+          'instance_mismatch',
+          'NAS 数据库与已绑定的数据库不同，请检查服务地址',
+        );
       }
       if (cursor < requestCursor) throw StateError('NAS 返回的同步进度无效');
-      final changes = (response['changes'] as List).map((raw) => Task.fromJson(_map(raw))).toList();
+      final changes = (response['changes'] as List)
+          .map((raw) => Task.fromJson(_map(raw)))
+          .toList();
       final results = (response['results'] as List).map(_map).toList();
-      final achievement = response['achievement'] == null ? null : AchievementState.fromJson(_map(response['achievement']));
+      final achievement = response['achievement'] == null
+          ? null
+          : AchievementState.fromJson(_map(response['achievement']));
       final sentIds = batch.map((op) => op['op_id'] as String).toSet();
       final seen = <String>{};
       for (final result in results) {
         final opId = result['op_id'] as String;
-        if (!sentIds.contains(opId) || !seen.add(opId) ||
+        if (!sentIds.contains(opId) ||
+            !seen.add(opId) ||
             !['applied', 'conflict'].contains(result['status'])) {
           throw StateError('NAS 返回的修改确认无效');
         }
         if (result['task'] != null) {
           final task = Task.fromJson(_map(result['task']));
           final operation = batch.firstWhere((op) => op['op_id'] == opId);
-          if (task.id != operation['task_id']) throw StateError('NAS 返回了错误的待办记录');
+          if (task.id != operation['task_id'])
+            throw StateError('NAS 返回了错误的待办记录');
         }
       }
       if (seen.length != sentIds.length) throw StateError('NAS 未确认全部修改，稍后重试');
@@ -395,21 +567,34 @@ class SyncEngine {
         for (final result in results) {
           final op = batch.firstWhere((op) => op['op_id'] == result['op_id']);
           final taskId = op['task_id'] as String;
-          final remote = result['task'] == null ? null : Task.fromJson(_map(result['task']));
-          _operations.removeWhere((pending) => pending['op_id'] == result['op_id']);
+          final remote = result['task'] == null
+              ? null
+              : Task.fromJson(_map(result['task']));
+          _operations.removeWhere(
+            (pending) => pending['op_id'] == result['op_id'],
+          );
           _attemptedIds.remove(result['op_id']);
           if (result['status'] == 'conflict') {
-            _conflicts[taskId] = SyncConflict(taskId: taskId, local: _tasks[taskId], remote: remote);
+            _conflicts[taskId] = SyncConflict(
+              taskId: taskId,
+              local: _tasks[taskId],
+              remote: remote,
+            );
             _removeTaskOperations(taskId);
           } else {
-            final next = _operations.where((pending) => pending['task_id'] == taskId).firstOrNull;
+            final next = _operations
+                .where((pending) => pending['task_id'] == taskId)
+                .firstOrNull;
             if (next != null) {
               // This operation has never been sent. Its base is now the actual
               // acknowledgement version of its predecessor, not a prediction.
               next['base_version'] = remote?.version ?? 0;
               final local = _tasks[taskId];
               if (local != null) {
-                _tasks[taskId] = local.copyWith(version: remote?.version ?? 0, changeSeq: remote?.changeSeq ?? 0);
+                _tasks[taskId] = local.copyWith(
+                  version: remote?.version ?? 0,
+                  changeSeq: remote?.changeSeq ?? 0,
+                );
               }
             } else if (remote != null) {
               _acceptRemote(remote, force: requestCursor == 0);
@@ -421,15 +606,27 @@ class SyncEngine {
         for (final remote in changes) {
           final conflict = _conflicts[remote.id];
           if (conflict != null) {
-            if (requestCursor == 0 || conflict.remote == null || remote.version >= conflict.remote!.version) {
-              _conflicts[remote.id] = SyncConflict(taskId: remote.id, local: conflict.local, remote: remote);
+            if (requestCursor == 0 ||
+                conflict.remote == null ||
+                remote.version >= conflict.remote!.version) {
+              _conflicts[remote.id] = SyncConflict(
+                taskId: remote.id,
+                local: conflict.local,
+                remote: remote,
+              );
             }
             continue;
           }
-          final queued = _operations.where((op) => op['task_id'] == remote.id).firstOrNull;
+          final queued = _operations
+              .where((op) => op['task_id'] == remote.id)
+              .firstOrNull;
           if (queued != null) {
             if (queued['base_version'] != remote.version) {
-              _conflicts[remote.id] = SyncConflict(taskId: remote.id, local: _tasks[remote.id], remote: remote);
+              _conflicts[remote.id] = SyncConflict(
+                taskId: remote.id,
+                local: _tasks[remote.id],
+                remote: remote,
+              );
               _removeTaskOperations(remote.id);
             }
             continue;
@@ -445,8 +642,12 @@ class SyncEngine {
             }
           }
           final pendingIds = _operations.map((op) => op['task_id']).toSet();
-          _tasks.removeWhere((id, _) => !snapshotIds.contains(id) &&
-              !pendingIds.contains(id) && !_conflicts.containsKey(id));
+          _tasks.removeWhere(
+            (id, _) =>
+                !snapshotIds.contains(id) &&
+                !pendingIds.contains(id) &&
+                !_conflicts.containsKey(id),
+          );
         }
         _cursor = cursor;
         _lastSyncedAt = DateTime.now().toUtc();
@@ -456,10 +657,14 @@ class SyncEngine {
 
   void _acceptRemote(Task remote, {bool force = false}) {
     final cached = _tasks[remote.id];
-    if (force || cached == null || remote.version >= cached.version) _tasks[remote.id] = remote;
+    if (force || cached == null || remote.version >= cached.version)
+      _tasks[remote.id] = remote;
   }
 
-  Future<void> resolveConflict(String taskId, {required bool keepLocal}) => _serial(() async {
+  Future<void> resolveConflict(
+    String taskId, {
+    required bool keepLocal,
+  }) => _serial(() async {
     _checkLoaded();
     final conflict = _conflicts[taskId];
     if (conflict == null) return;
@@ -468,12 +673,20 @@ class SyncEngine {
       _removeTaskOperations(taskId);
       final remote = conflict.remote;
       if (!keepLocal || conflict.local == null) {
-        if (remote == null) { _tasks.remove(taskId); } else { _tasks[taskId] = remote; }
+        if (remote == null) {
+          _tasks.remove(taskId);
+        } else {
+          _tasks[taskId] = remote;
+        }
         return;
       }
       final local = conflict.local!;
       if (local.deleted && (remote == null || remote.deleted)) {
-        if (remote == null) { _tasks.remove(taskId); } else { _tasks[taskId] = remote; }
+        if (remote == null) {
+          _tasks.remove(taskId);
+        } else {
+          _tasks[taskId] = remote;
+        }
         return;
       }
       // Server tombstones never resurrect: choosing a local edit creates a new
@@ -482,14 +695,26 @@ class SyncEngine {
       final id = recreate ? newId() : taskId;
       if (recreate) _tasks[taskId] = remote!;
       final chosen = Task(
-        id: id, title: local.title, note: local.note, listName: local.listName,
-        dueDate: local.dueDate, priority: local.priority, completed: local.completed,
-        deleted: local.deleted, version: recreate ? 0 : (remote?.version ?? 0),
+        id: id,
+        title: local.title,
+        note: local.note,
+        listName: local.listName,
+        dueDate: local.dueDate,
+        priority: local.priority,
+        completed: local.completed,
+        deleted: local.deleted,
+        version: recreate ? 0 : (remote?.version ?? 0),
         updatedAt: DateTime.now().toUtc().toIso8601String(),
         changeSeq: recreate ? 0 : (remote?.changeSeq ?? 0),
       );
       _tasks[id] = chosen;
-      _operations.add(_operation(chosen, chosen.version, chosen.deleted ? 'delete' : 'upsert'));
+      _operations.add(
+        _operation(
+          chosen,
+          chosen.version,
+          chosen.deleted ? 'delete' : 'upsert',
+        ),
+      );
     });
   });
 }

@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'appearance.dart';
 
 Color themeSwatch(TodoThemeColor color) => switch (color) {
-      TodoThemeColor.black => const Color(0xff171b19),
-      TodoThemeColor.white => const Color(0xffffffff),
-      TodoThemeColor.green => const Color(0xff326b58),
-      TodoThemeColor.blue => const Color(0xff315fa9),
-    };
+  TodoThemeColor.black => const Color(0xff171b19),
+  TodoThemeColor.white => const Color(0xffffffff),
+  TodoThemeColor.green => const Color(0xff326b58),
+  TodoThemeColor.blue => const Color(0xff315fa9),
+};
 
 ThemeData buildTodoTheme(TodoThemeColor themeColor) {
   final dark = themeColor == TodoThemeColor.black;
@@ -15,8 +15,8 @@ ThemeData buildTodoTheme(TodoThemeColor themeColor) {
     seedColor: themeColor == TodoThemeColor.white
         ? const Color(0xff596367)
         : themeColor == TodoThemeColor.black
-            ? const Color(0xffb9c3be)
-            : themeSwatch(themeColor),
+        ? const Color(0xffb9c3be)
+        : themeSwatch(themeColor),
     brightness: dark ? Brightness.dark : Brightness.light,
   );
   if (dark) {
@@ -58,7 +58,7 @@ ThemeData buildTodoTheme(TodoThemeColor themeColor) {
     colors = colors.copyWith(surface: Colors.white);
   }
   final background = switch (themeColor) {
-    TodoThemeColor.black => Colors.black,
+    TodoThemeColor.black => const Color(0xff111613),
     TodoThemeColor.white => const Color(0xfff5f7f8),
     TodoThemeColor.green => const Color(0xfff5f8f6),
     TodoThemeColor.blue => const Color(0xfff4f7fc),
@@ -76,15 +76,27 @@ ThemeData buildTodoTheme(TodoThemeColor themeColor) {
       scrolledUnderElevation: 0,
     ),
     dialogTheme: DialogThemeData(backgroundColor: colors.surface),
+    dividerTheme: DividerThemeData(
+      color: colors.outlineVariant,
+      thickness: 1,
+      space: 1,
+    ),
+    tooltipTheme: const TooltipThemeData(
+      waitDuration: Duration(milliseconds: 450),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: colors.surface,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(color: colors.outlineVariant),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(color: colors.outlineVariant),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -92,13 +104,13 @@ ThemeData buildTodoTheme(TodoThemeColor themeColor) {
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         minimumSize: const Size(0, 46),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(0, 44),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     ),
     navigationBarTheme: NavigationBarThemeData(

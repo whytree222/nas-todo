@@ -41,7 +41,8 @@ Future<void> _openAppCalendar(
     WidgetTester tester, AppController controller) async {
   await tester.pumpWidget(PrivateTodoApp(controller: controller));
   await tester.pumpAndSettle();
-  await tester.tap(find.text('日历').last);
+  await tester.tap(find.byType(NavigationBar).evaluate().isNotEmpty
+      ? find.text('日历').last : find.byTooltip('日历'));
   await tester.pumpAndSettle();
 }
 

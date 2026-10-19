@@ -158,6 +158,8 @@ void main() {
     final engine = SyncEngine(_Store(), _Transport()); await engine.load();
     final controller = AppController.forTesting(engine); addTearDown(controller.dispose);
     await tester.pumpWidget(PrivateTodoApp(controller: controller)); await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('清单与智能视图')); await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('成就').last);
     await tester.tap(find.text('成就').last); await tester.pumpAndSettle();
     expect(find.byType(AchievementsScreen), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsNothing);

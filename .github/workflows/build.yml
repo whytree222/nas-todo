@@ -106,6 +106,26 @@ jobs:
           path: ${{ runner.temp }}/nas-todo-sync-tests/celebration-*.png
           if-no-files-found: error
           retention-days: 14
+      - name: Record workbench visual previews
+        env:
+          NAS_TODO_TEST_TMP: ${{ runner.temp }}/nas-todo-sync-tests
+        run: |
+          python - <<'PY'
+          import base64, os
+          from pathlib import Path
+          for name in ('workbench-desktop.png', 'workbench-phone.png'):
+              path = Path(os.environ['NAS_TODO_TEST_TMP']) / name
+              if not path.is_file():
+                  raise RuntimeError(f'Missing workbench preview: {name}')
+              print('WORKBENCH_PREVIEW_PNG ' + name + ' ' + base64.b64encode(path.read_bytes()).decode('ascii'))
+          PY
+      - name: Save workbench visual previews
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-visual-previews
+          path: ${{ runner.temp }}/nas-todo-sync-tests/workbench-*.png
+          if-no-files-found: error
+          retention-days: 14
       - name: Build debug APK for testing
         run: flutter build apk --debug
       - name: Enable Android emulator acceleration
