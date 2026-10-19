@@ -181,10 +181,24 @@ void main() {
       expect(position.pixels, greaterThan(0));
       expect(tester.takeException(), isNull);
       final before = position.pixels;
+      final paintedBar = find.descendant(
+        of: find.byKey(const ValueKey('priority-board-scrollbar')),
+        matching: find.byWidgetPredicate((widget) => widget is CustomPaint &&
+          widget.foregroundPainter is ScrollbarPainter));
+      expect(paintedBar, findsOneWidget);
+      final painter = tester.widget<CustomPaint>(paintedBar).foregroundPainter! as ScrollbarPainter;
+      final barBox = tester.renderObject<RenderBox>(paintedBar);
+      final localThumb = Offset(barBox.size.width * .3,
+        barBox.size.height - painter.padding.resolve(TextDirection.ltr).bottom -
+          painter.crossAxisMargin - painter.thickness / 2);
+      expect(painter.hitTestOnlyThumbInteractive(localThumb, PointerDeviceKind.mouse), isTrue,
+        reason: 'Mouse drag must start on the painted thumb, not its outer margin.');
       final gesture = await tester.startGesture(
-        Offset(viewport.left + viewport.width * .3, viewport.bottom - 3),
+        barBox.localToGlobal(localThumb),
         kind: PointerDeviceKind.mouse);
-      await gesture.moveBy(const Offset(100, 0));
+      await gesture.moveBy(const Offset(20, 0));
+      await tester.pump();
+      await gesture.moveBy(const Offset(80, 0));
       await tester.pump(const Duration(milliseconds: 40));
       await gesture.up();
       await tester.pumpAndSettle();

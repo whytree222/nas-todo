@@ -58,20 +58,26 @@ class _TaskBoardViewState extends State<TaskBoardView> {
               return Scrollbar(
                 key: const ValueKey('priority-board-scrollbar'),
                 controller: _horizontal,
-                child: SingleChildScrollView(
-                  key: const ValueKey('priority-board-scroll'),
-                  controller: _horizontal,
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.fromLTRB(20, 0, 8, 16),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (var priority = 0; priority <= 2; priority++)
-                        SizedBox(
-                          width: width,
-                          child: _column(context, priority),
-                        ),
-                    ],
+                thumbVisibility: ![TargetPlatform.android, TargetPlatform.iOS]
+                    .contains(Theme.of(context).platform),
+                scrollbarOrientation: ScrollbarOrientation.bottom,
+                child: ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                  child: SingleChildScrollView(
+                    key: const ValueKey('priority-board-scroll'),
+                    controller: _horizontal,
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.fromLTRB(20, 0, 8, 16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var priority = 0; priority <= 2; priority++)
+                          SizedBox(
+                            width: width,
+                            child: _column(context, priority),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               );
