@@ -271,6 +271,9 @@ void main() {
     testWidgets(
       'Workbench ${desktop ? 'desktop' : 'phone'} preview uses synthetic data only',
       (tester) async {
+        final previousDisableShadows = debugDisableShadows;
+        debugDisableShadows = false;
+        addTearDown(() => debugDisableShadows = previousDisableShadows);
         _size(tester, desktop ? const Size(1440, 900) : const Size(390, 844));
         final controller = await _controller();
         await _seed(controller);

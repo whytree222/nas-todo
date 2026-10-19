@@ -968,8 +968,8 @@ class _HomeScreenState extends State<HomeScreen>
                   showSelectedIcon: false,
                   style: ButtonStyle(
                     visualDensity: VisualDensity.compact,
-                    textStyle: const WidgetStatePropertyAll(
-                      TextStyle(fontSize: 11),
+                    textStyle: WidgetStatePropertyAll(
+                      Theme.of(context).textTheme.labelLarge?.copyWith(fontSize: 11),
                     ),
                     padding: const WidgetStatePropertyAll(
                       EdgeInsets.symmetric(horizontal: 8),
