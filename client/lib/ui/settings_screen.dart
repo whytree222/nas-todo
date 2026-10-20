@@ -198,6 +198,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 18),
           _SettingsCard(
+            title: '个人功能同步',
+            icon: Icons.hub_outlined,
+            children: [
+              Text(controller.personalSupported ? '个人功能服务已连接'
+                : controller.lastSyncedAt == null ? '同步后检查服务版本' : '需要更新 NAS 个人功能服务',
+                key: const ValueKey('personal-capability-status'),
+                style: TextStyle(color: controller.personalSupported ? colors.primary : colors.onSurfaceVariant)),
+              const SizedBox(height: 10),
+              const Text('子任务、标签、重复规则和习惯打卡需要 v0.10.0 NAS 服务。连接旧服务时，基本待办仍可同步，新个人数据会保留在本机等待升级。'),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _SettingsCard(
             title: '离线与外网使用',
             icon: Icons.shield_outlined,
             children: [
