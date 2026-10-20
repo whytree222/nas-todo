@@ -12,6 +12,7 @@ import 'package:nas_todo/main.dart';
 import 'package:nas_todo/sync_core.dart';
 import 'package:nas_todo/task_dates.dart';
 import 'package:nas_todo/theme.dart';
+import 'package:nas_todo/personal_core.dart';
 import 'package:nas_todo/ui/home_screen.dart';
 import 'package:nas_todo/ui/task_board_view.dart';
 import 'package:nas_todo/ui/task_detail_pane.dart';
@@ -57,6 +58,7 @@ Future<void> _seed(AppController controller) async {
       listName: '生活',
       dueDate: dateKey(now),
       priority: 2,
+      tags: const ['生活'],
     ),
   );
   await controller.saveTask(
@@ -66,6 +68,7 @@ Future<void> _seed(AppController controller) async {
       listName: '工作',
       dueDate: dateKey(now.add(const Duration(days: 2))),
       priority: 1,
+      tags: const ['工作'],
     ),
   );
   await controller.saveTask(
@@ -274,48 +277,66 @@ void main() {
         final previousDisableShadows = debugDisableShadows;
         debugDisableShadows = false;
         try {
-        _size(tester, desktop ? const Size(1440, 900) : const Size(390, 844));
-        final controller = await _controller();
-        await _seed(controller);
-        final font = await _loadPreviewFonts(tester);
-        var theme = buildTodoTheme(TodoThemeColor.green);
-        if (font != null) {
-          theme = theme.copyWith(
-            textTheme: theme.textTheme.apply(fontFamily: font),
-          );
-        }
-        await tester.pumpWidget(
-          RepaintBoundary(
-            key: const ValueKey('workbench-preview'),
-            child: MaterialApp(
-              debugShowCheckedModeBanner: false,
-              theme: theme,
-              home: HomeScreen(controller: controller),
+          _size(tester, desktop ? const Size(1440, 900) : const Size(390, 844));
+          final controller = await _controller();
+          await _seed(controller);
+          final font = await _loadPreviewFonts(tester);
+          var theme = buildTodoTheme(TodoThemeColor.green);
+          if (font != null) {
+            theme = theme.copyWith(
+              textTheme: theme.textTheme.apply(fontFamily: font),
+            );
+          }
+          await tester.pumpWidget(
+            RepaintBoundary(
+              key: const ValueKey('workbench-preview'),
+              child: MaterialApp(
+                debugShowCheckedModeBanner: false,
+                theme: theme,
+                home: HomeScreen(controller: controller),
+              ),
             ),
-          ),
-        );
-        await tester.pumpAndSettle();
-        if (desktop) {
-          final task = controller.tasks.firstWhere(
-            (task) => task.title == '把产品方案画清楚',
           );
-          await tester.tap(find.byKey(ValueKey('task-detail-${task.id}')));
           await tester.pumpAndSettle();
-        }
-        await _preview(
-          tester,
-          'workbench-${desktop ? 'desktop' : 'phone'}.png',
-          font != null,
-        );
-        if (desktop) {
-          await tester.tap(find.text('看板'));
-          await tester.pumpAndSettle();
-          await _preview(tester, 'workbench-board.png', font != null);
-          await tester.tap(find.text('四象限'));
-          await tester.pumpAndSettle();
-          await _preview(tester, 'workbench-matrix.png', font != null);
-        }
-        expect(tester.takeException(), isNull);
+          if (desktop) {
+            final task = controller.tasks.firstWhere(
+              (task) => task.title == '把产品方案画清楚',
+            );
+            await tester.tap(find.byKey(ValueKey('task-detail-${task.id}')));
+            await tester.pumpAndSettle();
+          }
+          await _preview(
+            tester,
+            'workbench-${desktop ? 'desktop' : 'phone'}.png',
+            font != null,
+          );
+          if (desktop) {
+            await tester.tap(find.text('看板'));
+            await tester.pumpAndSettle();
+            await _preview(tester, 'workbench-board.png', font != null);
+            await tester.tap(find.text('四象限'));
+            await tester.pumpAndSettle();
+            await _preview(tester, 'workbench-matrix.png', font != null);
+            await controller.saveHabit(const HabitDraft(name: '读几页喜欢的书'));
+            await controller.saveHabit(
+              const HabitDraft(name: '今天也记得喝水', goalType: 'count', goal: 8),
+            );
+            final reading = controller.habits.firstWhere(
+              (habit) => habit.name == '读几页喜欢的书',
+            );
+            await controller.setHabitValue(
+              reading.id,
+              dateKey(DateTime.now()),
+              1,
+            );
+            await tester.tap(find.byTooltip('习惯'));
+            await tester.pumpAndSettle();
+            await _preview(tester, 'workbench-habits.png', font != null);
+            await tester.tap(find.byTooltip('日历'));
+            await tester.pumpAndSettle();
+            await _preview(tester, 'workbench-calendar.png', font != null);
+          }
+          expect(tester.takeException(), isNull);
         } finally {
           debugDisableShadows = previousDisableShadows;
         }
@@ -326,7 +347,9 @@ void main() {
 
 Future<String?> _loadPreviewFonts(WidgetTester tester) async {
   const cjk = '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc';
-  if (!File(cjk).existsSync()) return null;
+  if (!File(cjk).existsSync()) {
+    return null;
+  }
   await tester.runAsync(() async {
     final font = FontLoader('WorkbenchPreviewSans')
       ..addFont(
@@ -356,7 +379,9 @@ Future<void> _preview(
   bool fontsLoaded,
 ) async {
   final directory = Platform.environment['NAS_TODO_TEST_TMP'];
-  if (directory == null || !fontsLoaded) return;
+  if (directory == null || !fontsLoaded) {
+    return;
+  }
   final boundary = tester.renderObject<RenderRepaintBoundary>(
     find.byKey(const ValueKey('workbench-preview')),
   );

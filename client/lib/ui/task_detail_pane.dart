@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../app_controller.dart';
 import '../sync_core.dart';
+import 'task_editor.dart';
+import 'task_repeat_options.dart';
 
 /// A selection preview; editing still uses the shared conflict-aware editor.
 class TaskDetailPane extends StatelessWidget {
@@ -129,6 +131,38 @@ class TaskDetailPane extends StatelessWidget {
                           '状态',
                           current.completed ? '已完成' : '进行中',
                         ),
+                        if (current.parentId != null)
+                          _field(
+                            context,
+                            Icons.subdirectory_arrow_right_rounded,
+                            '父待办',
+                            controller.tasks
+                                    .where(
+                                      (task) => task.id == current.parentId,
+                                    )
+                                    .firstOrNull
+                                    ?.title ??
+                                '父待办已移除',
+                          ),
+                        if (current.tags.isNotEmpty)
+                          _field(
+                            context,
+                            Icons.sell_outlined,
+                            '标签',
+                            current.tags.map((tag) => '#$tag').join(' '),
+                          ),
+                        if (current.repeatRule != null)
+                          _field(
+                            context,
+                            Icons.repeat_rounded,
+                            '重复',
+                            taskRepeatLabel(current.repeatRule),
+                          ),
+                        if (current.repeatRule != null)
+                          const Text(
+                            '完成并同步后生成下一次；子任务分别按自己的规则重复。',
+                            style: TextStyle(fontSize: 11),
+                          ),
                         const Divider(height: 32),
                         Text(
                           '备注',
@@ -147,6 +181,62 @@ class TaskDetailPane extends StatelessWidget {
                                 ? colors.outline
                                 : colors.onSurface,
                           ),
+                        ),
+                        const Divider(height: 32),
+                        Text(
+                          '子任务',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                        for (final child in controller.tasks.where(
+                          (task) => task.parentId == current.id,
+                        ))
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Checkbox(
+                              value: child.completed,
+                              onChanged:
+                                  controller.editing ||
+                                      controller.conflicts.any(
+                                        (c) => c.taskId == child.id,
+                                      )
+                                  ? null
+                                  : (value) => controller.setCompleted(
+                                      child.id,
+                                      value ?? false,
+                                    ),
+                            ),
+                            title: Text(
+                              child.title,
+                              style: TextStyle(
+                                fontSize: 12,
+                                decoration: child.completed
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ),
+                            ),
+                            onTap: () => showTaskEditor(
+                              context,
+                              controller,
+                              task: child,
+                            ),
+                          ),
+                        TextButton.icon(
+                          key: ValueKey('detail-add-child-${current.id}'),
+                          onPressed: controller.editing
+                              ? null
+                              : () => showTaskEditor(
+                                  context,
+                                  controller,
+                                  initialParentId: current.id,
+                                  initialTags: current.tags,
+                                  listName: current.listName,
+                                  initialDueDate: current.dueDate,
+                                ),
+                          icon: const Icon(Icons.add_rounded, size: 17),
+                          label: const Text('添加子任务'),
                         ),
                       ],
                     ),

@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'achievement_core.dart';
+import 'personal_core.dart';
+export 'personal_core.dart' show TaskRepeatRule;
+part 'personal_sync.dart';
 
 /// Storage must finish durably before its returned future completes.
 abstract interface class DataStore {
@@ -12,6 +15,10 @@ abstract interface class DataStore {
 
 abstract interface class SyncTransport {
   Future<Map<String, dynamic>> sync(Map<String, dynamic> payload);
+}
+
+abstract interface class PersonalSyncTransport {
+  Future<Map<String, dynamic>> syncPersonal(Map<String, dynamic> payload);
 }
 
 class SyncServerException implements Exception {
@@ -39,6 +46,9 @@ class TaskDraft {
   final String? dueDate;
   final int priority;
   final bool completed;
+  final String? parentId;
+  final List<String> tags;
+  final TaskRepeatRule? repeatRule;
   const TaskDraft({
     required this.title,
     this.note = '',
@@ -46,6 +56,9 @@ class TaskDraft {
     this.dueDate,
     this.priority = 0,
     this.completed = false,
+    this.parentId,
+    this.tags = const [],
+    this.repeatRule,
   });
 
   factory TaskDraft.fromTask(Task task) => TaskDraft(
@@ -55,9 +68,12 @@ class TaskDraft {
     dueDate: task.dueDate,
     priority: task.priority,
     completed: task.completed,
+    parentId: task.parentId,
+    tags: task.tags,
+    repeatRule: task.repeatRule,
   );
 
-  Map<String, dynamic> toJson() => {
+  Map<String, dynamic> toBaseJson() => {
     'title': title.trim(),
     'note': note,
     'list_name': listName.trim(),
@@ -65,31 +81,68 @@ class TaskDraft {
     'priority': priority,
     'completed': completed,
   };
+  Map<String, dynamic> toMetadata() => {
+    'parent_id': parentId,
+    'tags': normalizedTags(tags),
+    'repeat_rule': repeatRule?.toJson(),
+  };
+  bool get hasMetadata =>
+      parentId != null || tags.isNotEmpty || repeatRule != null;
+  Map<String, dynamic> toJson() => {
+    ...toBaseJson(),
+    if (hasMetadata) ...toMetadata(),
+  };
+
+  TaskDraft copyWith({
+    String? title,
+    String? note,
+    String? listName,
+    String? dueDate,
+    int? priority,
+    bool? completed,
+    String? parentId,
+    List<String>? tags,
+    TaskRepeatRule? repeatRule,
+    bool clearDueDate = false,
+    bool clearParentId = false,
+    bool clearRepeatRule = false,
+  }) => TaskDraft(
+    title: title ?? this.title,
+    note: note ?? this.note,
+    listName: listName ?? this.listName,
+    dueDate: clearDueDate ? null : dueDate ?? this.dueDate,
+    priority: priority ?? this.priority,
+    completed: completed ?? this.completed,
+    parentId: clearParentId ? null : parentId ?? this.parentId,
+    tags: tags ?? this.tags,
+    repeatRule: clearRepeatRule ? null : repeatRule ?? this.repeatRule,
+  );
 
   void validate() {
     if (title.trim().isEmpty || title.trim().runes.length > 200) {
       throw ArgumentError('标题需要 1–200 个字符');
     }
-    if (note.runes.length > 10000) throw ArgumentError('备注最多 10000 个字符');
+    if (note.runes.length > 10000) {
+      throw ArgumentError('备注最多 10000 个字符');
+    }
     if (listName.trim().isEmpty || listName.trim().runes.length > 60) {
       throw ArgumentError('清单名称需要 1–60 个字符');
     }
-    if (priority < 0 || priority > 2) throw ArgumentError('优先级无效');
-    if (dueDate != null) {
-      final date = DateTime.tryParse(dueDate!);
-      if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dueDate!) ||
-          date == null ||
-          date.year < 1 ||
-          _dateString(date) != dueDate) {
-        throw ArgumentError('截止日期无效');
-      }
+    if (priority < 0 || priority > 2) {
+      throw ArgumentError('优先级无效');
+    }
+    if (dueDate != null && !validPersonalDate(dueDate!)) {
+      throw ArgumentError('截止日期无效');
+    }
+    if (parentId != null && !validPersonalId(parentId!)) {
+      throw ArgumentError('父待办标识无效');
+    }
+    normalizedTags(tags);
+    repeatRule?.validate();
+    if (repeatRule != null && dueDate == null) {
+      throw ArgumentError('重复待办需要安排日期');
     }
   }
-
-  static String _dateString(DateTime date) =>
-      '${date.year.toString().padLeft(4, '0')}-'
-      '${date.month.toString().padLeft(2, '0')}-'
-      '${date.day.toString().padLeft(2, '0')}';
 }
 
 class Task {
@@ -104,6 +157,9 @@ class Task {
   final int version;
   final String updatedAt;
   final int changeSeq;
+  final String? parentId;
+  final List<String> tags;
+  final TaskRepeatRule? repeatRule;
   const Task({
     required this.id,
     required this.title,
@@ -116,6 +172,9 @@ class Task {
     this.version = 0,
     this.updatedAt = '',
     this.changeSeq = 0,
+    this.parentId,
+    this.tags = const [],
+    this.repeatRule,
   });
 
   factory Task.fromJson(Map<String, dynamic> json) => Task(
@@ -130,6 +189,15 @@ class Task {
     version: json['version'] as int,
     updatedAt: json['updated_at'] as String,
     changeSeq: json['change_seq'] as int,
+    parentId: json['parent_id'] as String?,
+    tags: List<String>.unmodifiable(
+      (json['tags'] as List? ?? []).cast<String>(),
+    ),
+    repeatRule: json['repeat_rule'] == null
+        ? null
+        : TaskRepeatRule.fromJson(
+            Map<String, dynamic>.from(json['repeat_rule'] as Map),
+          ),
   );
 
   Map<String, dynamic> toJson() => {
@@ -140,11 +208,34 @@ class Task {
     'due_date': dueDate,
     'priority': priority,
     'completed': completed,
+    if (parentId != null || tags.isNotEmpty || repeatRule != null)
+      ...TaskDraft.fromTask(this).toMetadata(),
     'deleted': deleted,
     'version': version,
     'updated_at': updatedAt,
     'change_seq': changeSeq,
   };
+
+  Task withMetadata(Map<String, dynamic> metadata) => Task(
+    id: id,
+    title: title,
+    note: note,
+    listName: listName,
+    dueDate: dueDate,
+    priority: priority,
+    completed: completed,
+    deleted: deleted,
+    version: version,
+    updatedAt: updatedAt,
+    changeSeq: changeSeq,
+    parentId: metadata['parent_id'] as String?,
+    tags: List<String>.unmodifiable((metadata['tags'] as List).cast<String>()),
+    repeatRule: metadata['repeat_rule'] == null
+        ? null
+        : TaskRepeatRule.fromJson(
+            Map<String, dynamic>.from(metadata['repeat_rule'] as Map),
+          ),
+  );
 
   Task copyWith({
     bool? completed,
@@ -163,6 +254,9 @@ class Task {
     version: version ?? this.version,
     updatedAt: updatedAt,
     changeSeq: changeSeq ?? this.changeSeq,
+    parentId: parentId,
+    tags: tags,
+    repeatRule: repeatRule,
   );
 }
 
@@ -203,6 +297,13 @@ class SyncEngine {
   final List<Map<String, dynamic>> _operations = [];
   final Set<String> _attemptedIds = {};
   final Map<String, SyncConflict> _conflicts = {};
+  final Map<String, PersonalRecord> _personalRecords = {};
+  final List<Map<String, dynamic>> _personalOps = [];
+  final Set<String> _personalAttempted = {};
+  final Set<String> _personalTaskReleases = {};
+  final Map<String, PersonalConflict> _personalConflicts = {};
+  int _personalCursor = 0;
+  bool _personalSupported = false;
   Future<void> _tail = Future<void>.value();
   String? _instanceId;
   int _cursor = 0;
@@ -212,10 +313,12 @@ class SyncEngine {
   bool _achievementsSupported = false;
 
   SyncEngine(this.store, this.transport);
-  List<Task> get tasks =>
-      List.unmodifiable(_tasks.values.where((t) => !t.deleted));
+  List<Task> get tasks => List.unmodifiable(
+    _tasks.values.where((t) => !t.deleted).map(_decorateTask),
+  );
   List<SyncConflict> get conflicts => List.unmodifiable(_conflicts.values);
-  int get pendingCount => _operations.length;
+  int get pendingCount =>
+      _operations.length + _personalOps.length + _personalTaskReleases.length;
   DateTime? get lastSyncedAt => _lastSyncedAt;
   AchievementState? get achievement => _achievement;
   bool get achievementsSupported => _achievementsSupported;
@@ -227,14 +330,20 @@ class SyncEngine {
   }
 
   Future<void> load() => _serial(() async {
-    if (_loaded) return;
+    if (_loaded) {
+      return;
+    }
     final state = await store.read();
-    if (state != null) _restore(state);
+    if (state != null) {
+      _restore(state);
+    }
     _loaded = true;
   });
 
   void _checkLoaded() {
-    if (!_loaded) throw StateError('请先加载本地数据');
+    if (!_loaded) {
+      throw StateError('请先加载本地数据');
+    }
   }
 
   Map<String, dynamic> _state() => {
@@ -248,17 +357,22 @@ class SyncEngine {
     'last_synced_at': _lastSyncedAt?.toUtc().toIso8601String(),
     'achievement': _achievement?.toJson(),
     'achievements_supported': _achievementsSupported,
+    ..._personalState(),
   };
 
   void _restore(Map<String, dynamic> state) {
-    if (state['schema'] != 1) throw StateError('本地数据版本不受支持');
+    if (state['schema'] != 1) {
+      throw StateError('本地数据版本不受支持');
+    }
     _achievement = state['achievement'] == null
         ? null
         : AchievementState.fromJson(_map(state['achievement']));
     _achievementsSupported = state['achievements_supported'] as bool? ?? false;
     _instanceId = state['instance_id'] as String?;
     _cursor = state['cursor'] as int;
-    if (_cursor < 0) throw StateError('本地同步记录损坏');
+    if (_cursor < 0) {
+      throw StateError('本地同步记录损坏');
+    }
     _lastSyncedAt = state['last_synced_at'] == null
         ? null
         : DateTime.parse(state['last_synced_at'] as String);
@@ -278,6 +392,7 @@ class SyncEngine {
       final conflict = SyncConflict.fromJson(_map(raw));
       _conflicts[conflict.taskId] = conflict;
     }
+    _restorePersonal(state);
   }
 
   Future<void> _commit(void Function() change) async {
@@ -298,19 +413,14 @@ class SyncEngine {
   Future<TaskCompletionChange> setCompleted(String id, bool completed) =>
       _serial(() async {
         _checkLoaded();
-        final task = _tasks[id];
-        if (task == null || task.deleted) throw StateError('这条待办已删除');
+        final task = _tasks[id] == null ? null : _decorateTask(_tasks[id]!);
+        if (task == null || task.deleted) {
+          throw StateError('这条待办已删除');
+        }
         // Change only completion, keeping content freshly pulled by a preceding
         // in-flight sync. A checkbox must never write an old title or old note.
         await _saveDraft(
-          TaskDraft(
-            title: task.title,
-            note: task.note,
-            listName: task.listName,
-            dueDate: task.dueDate,
-            priority: task.priority,
-            completed: completed,
-          ),
+          TaskDraft.fromTask(task).copyWith(completed: completed),
           id: id,
         );
         return TaskCompletionChange(before: task, tasks: tasks);
@@ -318,24 +428,22 @@ class SyncEngine {
 
   Future<void> scheduleTask(String id, String date) => _serial(() async {
     _checkLoaded();
-    final task = _tasks[id];
-    if (task == null || task.deleted) throw StateError('这条待办已删除');
-    if (_conflicts.containsKey(id)) throw StateError('请先处理这条待办的同步冲突');
-    if (task.dueDate == date) return;
-    if (task.dueDate != null) throw StateError('这条待办已有日期，请刷新后重试');
+    final task = _tasks[id] == null ? null : _decorateTask(_tasks[id]!);
+    if (task == null || task.deleted) {
+      throw StateError('这条待办已删除');
+    }
+    if (_conflicts.containsKey(id)) {
+      throw StateError('请先处理这条待办的同步冲突');
+    }
+    if (task.dueDate == date) {
+      return;
+    }
+    if (task.dueDate != null) {
+      throw StateError('这条待办已有日期，请刷新后重试');
+    }
     // Read inside the sync queue: dragging changes only the date, never content
     // or completion freshly received from the NAS while the drag was underway.
-    await _saveDraft(
-      TaskDraft(
-        title: task.title,
-        note: task.note,
-        listName: task.listName,
-        dueDate: date,
-        priority: task.priority,
-        completed: task.completed,
-      ),
-      id: id,
-    );
+    await _saveDraft(TaskDraft.fromTask(task).copyWith(dueDate: date), id: id);
   });
 
   Future<void> setTaskPlacement(
@@ -347,8 +455,12 @@ class SyncEngine {
     bool requireIncomplete = false,
   }) => _serial(() async {
     final task = _placementTask(id);
-    if (requireIncomplete && task.completed) throw StateError('已完成的待办不能移动');
-    if (dueDate != null && clearDueDate) throw ArgumentError('日期不能同时设置和清除');
+    if (requireIncomplete && task.completed) {
+      throw StateError('已完成的待办不能移动');
+    }
+    if (dueDate != null && clearDueDate) {
+      throw ArgumentError('日期不能同时设置和清除');
+    }
     await _placeTask(
       task,
       listName: listName,
@@ -367,23 +479,41 @@ class SyncEngine {
     // Resolve the quadrant intent after any pending NAS pull. Computing fields
     // from a drag snapshot could clear a future date just received from the NAS.
     final task = _placementTask(id);
-    if (task.completed) throw StateError('已完成的待办不能调整四象限');
+    if (task.completed) {
+      throw StateError('已完成的待办不能调整四象限');
+    }
     TaskDraft(title: task.title, dueDate: today).validate();
     final isUrgent =
         task.dueDate != null && task.dueDate!.compareTo(today) <= 0;
+    final moveRepeatedToTomorrow =
+        !urgent && isUrgent && task.repeatRule != null;
+    final day = DateTime.parse(today);
+    final tomorrow = DateTime(
+      day.year,
+      day.month,
+      day.day + 1,
+    ).toIso8601String().substring(0, 10);
     await _placeTask(
       task,
       priority: important ? (task.priority == 2 ? 2 : 1) : 0,
-      dueDate: urgent && !isUrgent ? today : null,
-      clearDueDate: !urgent && isUrgent,
+      dueDate: moveRepeatedToTomorrow
+          ? tomorrow
+          : urgent && !isUrgent
+          ? today
+          : null,
+      clearDueDate: !urgent && isUrgent && !moveRepeatedToTomorrow,
     );
   });
 
   Task _placementTask(String id) {
     _checkLoaded();
-    final task = _tasks[id];
-    if (task == null || task.deleted) throw StateError('这条待办已删除');
-    if (_conflicts.containsKey(id)) throw StateError('请先处理这条待办的同步冲突');
+    final task = _tasks[id] == null ? null : _decorateTask(_tasks[id]!);
+    if (task == null || task.deleted) {
+      throw StateError('这条待办已删除');
+    }
+    if (_conflicts.containsKey(id)) {
+      throw StateError('请先处理这条待办的同步冲突');
+    }
     return task;
   }
 
@@ -394,13 +524,11 @@ class SyncEngine {
     String? dueDate,
     bool clearDueDate = false,
   }) async {
-    final draft = TaskDraft(
-      title: task.title,
-      note: task.note,
-      listName: listName ?? task.listName,
-      priority: priority ?? task.priority,
-      dueDate: clearDueDate ? null : dueDate ?? task.dueDate,
-      completed: task.completed,
+    final draft = TaskDraft.fromTask(task).copyWith(
+      listName: listName,
+      priority: priority,
+      dueDate: dueDate,
+      clearDueDate: clearDueDate,
     );
     draft.validate();
     if (draft.listName.trim() == task.listName &&
@@ -415,14 +543,19 @@ class SyncEngine {
     _checkLoaded();
     draft.validate();
     final taskId = id ?? newId();
-    if (_conflicts.containsKey(taskId)) throw StateError('请先处理这条待办的同步冲突');
+    _validateParent(taskId, draft.parentId);
+    if (_conflicts.containsKey(taskId)) {
+      throw StateError('请先处理这条待办的同步冲突');
+    }
     final old = _tasks[taskId];
-    if (id != null && (old == null || old.deleted)) throw StateError('这条待办已删除');
+    if (id != null && (old == null || old.deleted)) {
+      throw StateError('这条待办已删除');
+    }
     final queued = _operations
         .where((op) => op['task_id'] == taskId)
         .firstOrNull;
     final base = queued?['base_version'] as int? ?? old?.version ?? 0;
-    final data = draft.toJson();
+    final data = draft.toBaseJson();
     final task = Task(
       id: taskId,
       title: data['title'] as String,
@@ -439,6 +572,7 @@ class SyncEngine {
       _tasks[taskId] = task;
       _removeUnsent(taskId);
       _operations.add(_operation(task, base, 'upsert'));
+      _putTaskMetadata(taskId, draft);
     });
   }
 
@@ -447,7 +581,7 @@ class SyncEngine {
     'task_id': task.id,
     'base_version': base,
     'action': action,
-    'data': TaskDraft.fromTask(task).toJson(),
+    'data': TaskDraft.fromTask(task).toBaseJson(),
   };
 
   void _removeUnsent(String taskId) => _operations.removeWhere(
@@ -463,12 +597,17 @@ class SyncEngine {
 
   Future<void> deleteTask(String id) => _serial(() async {
     _checkLoaded();
-    if (_conflicts.containsKey(id)) throw StateError('请先处理这条待办的同步冲突');
+    if (_conflicts.containsKey(id)) {
+      throw StateError('请先处理这条待办的同步冲突');
+    }
     final old = _tasks[id];
-    if (old == null || old.deleted) return;
+    if (old == null || old.deleted) {
+      return;
+    }
     final queued = _operations.where((op) => op['task_id'] == id).firstOrNull;
     final base = queued?['base_version'] as int? ?? old.version;
     await _commit(() {
+      _promoteLocalChildren(id);
       // A never-sent offline creation can be cancelled entirely. Once attempted,
       // preserve it unchanged, as the NAS may have committed a lost response.
       if (base == 0 &&
@@ -476,6 +615,8 @@ class SyncEngine {
           !_attemptedIds.contains(queued['op_id'])) {
         _tasks.remove(id);
         _removeTaskOperations(id);
+        _personalRecords.remove('task_meta/$id');
+        _removePersonalOps('task_meta', id);
         return;
       }
       _tasks[id] = old.copyWith(deleted: true);
@@ -486,6 +627,10 @@ class SyncEngine {
 
   Future<void> sync() => _serial(() async {
     _checkLoaded();
+    var capabilityProbe =
+        !_personalSupported &&
+        _personalOps.isNotEmpty &&
+        transport is PersonalSyncTransport;
     // Drain >100 local edits in bounded batches. Every acknowledged batch is
     // independently durable; an interrupted later batch is safe to retry.
     do {
@@ -493,16 +638,25 @@ class SyncEngine {
       var batchBytes = 256;
       final batchTasks = <String>{};
       for (final operation in _operations) {
-        if (batch.length == 100) break;
+        if (capabilityProbe) {
+          break;
+        }
+        if (batch.length == 100) {
+          break;
+        }
         final taskId = operation['task_id'] as String;
-        if (batchTasks.contains(taskId)) continue;
+        if (batchTasks.contains(taskId)) {
+          continue;
+        }
         final size = utf8.encode(jsonEncode(operation)).length + 1;
-        if (batchBytes + size > 900000) break;
+        if (batchBytes + size > 900000) {
+          break;
+        }
         batch.add(_map(operation));
         batchTasks.add(taskId);
         batchBytes += size;
       }
-      if (batch.isEmpty && _operations.isNotEmpty) {
+      if (batch.isEmpty && _operations.isNotEmpty && !capabilityProbe) {
         throw StateError('本地修改超过单次同步限制，请保留数据文件并检查内容');
       }
       if (batch.any((op) => !_attemptedIds.contains(op['op_id']))) {
@@ -511,20 +665,26 @@ class SyncEngine {
         );
       }
       var requestCursor = _cursor;
+      final deferRepeats =
+          _personalSupported && transport is PersonalSyncTransport;
       Map<String, dynamic> response;
       try {
         response = await transport.sync({
           'instance_id': _instanceId,
           'cursor': requestCursor,
           'operations': batch,
+          if (deferRepeats) 'defer_repeats': true,
         });
       } on SyncServerException catch (error) {
-        if (error.code != 'future_cursor' || _instanceId == null) rethrow;
+        if (error.code != 'future_cursor' || _instanceId == null) {
+          rethrow;
+        }
         requestCursor = 0;
         response = await transport.sync({
           'instance_id': _instanceId,
           'cursor': 0,
           'operations': batch,
+          if (deferRepeats) 'defer_repeats': true,
         });
       }
       final instance = response['instance_id'] as String;
@@ -536,7 +696,9 @@ class SyncEngine {
           'NAS 数据库与已绑定的数据库不同，请检查服务地址',
         );
       }
-      if (cursor < requestCursor) throw StateError('NAS 返回的同步进度无效');
+      if (cursor < requestCursor) {
+        throw StateError('NAS 返回的同步进度无效');
+      }
       final changes = (response['changes'] as List)
           .map((raw) => Task.fromJson(_map(raw)))
           .toList();
@@ -561,11 +723,16 @@ class SyncEngine {
           }
         }
       }
-      if (seen.length != sentIds.length) throw StateError('NAS 未确认全部修改，稍后重试');
+      if (seen.length != sentIds.length) {
+        throw StateError('NAS 未确认全部修改，稍后重试');
+      }
       await _commit(() {
         _instanceId = instance;
-        if (achievement != null) _achievement = achievement;
+        if (achievement != null) {
+          _achievement = achievement;
+        }
         _achievementsSupported = achievement != null;
+        _personalSupported = response['personal_sync'] == 1;
         for (final result in results) {
           final op = batch.firstWhere((op) => op['op_id'] == result['op_id']);
           final taskId = op['task_id'] as String;
@@ -584,6 +751,9 @@ class SyncEngine {
             );
             _removeTaskOperations(taskId);
           } else {
+            if (deferRepeats && op['action'] == 'upsert') {
+              _personalTaskReleases.add(taskId);
+            }
             final next = _operations
                 .where((pending) => pending['task_id'] == taskId)
                 .firstOrNull;
@@ -654,7 +824,9 @@ class SyncEngine {
         _cursor = cursor;
         _lastSyncedAt = DateTime.now().toUtc();
       });
+      capabilityProbe = false;
     } while (_operations.isNotEmpty);
+    await _syncPersonal();
   });
 
   void _acceptRemote(Task remote, {bool force = false}) {
@@ -670,7 +842,9 @@ class SyncEngine {
   }) => _serial(() async {
     _checkLoaded();
     final conflict = _conflicts[taskId];
-    if (conflict == null) return;
+    if (conflict == null) {
+      return;
+    }
     await _commit(() {
       _conflicts.remove(taskId);
       _removeTaskOperations(taskId);
@@ -696,7 +870,9 @@ class SyncEngine {
       // task ID and leaves the old deletion intact on every other device.
       final recreate = !local.deleted && remote?.deleted == true;
       final id = recreate ? newId() : taskId;
-      if (recreate) _tasks[taskId] = remote!;
+      if (recreate) {
+        _tasks[taskId] = remote!;
+      }
       final chosen = Task(
         id: id,
         title: local.title,
@@ -711,6 +887,9 @@ class SyncEngine {
         changeSeq: recreate ? 0 : (remote?.changeSeq ?? 0),
       );
       _tasks[id] = chosen;
+      if (recreate) {
+        _putTaskMetadata(id, TaskDraft.fromTask(_decorateTask(local)));
+      }
       _operations.add(
         _operation(
           chosen,

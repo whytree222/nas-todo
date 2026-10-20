@@ -12,6 +12,7 @@ import 'daily_celebration.dart';
 import 'storage_io.dart';
 import 'sync_core.dart';
 import 'task_dates.dart';
+import 'personal_core.dart';
 
 /// Keeps local edits available even when the NAS cannot be reached.
 class AppController extends ChangeNotifier {
@@ -95,6 +96,11 @@ class AppController extends ChangeNotifier {
   }
 
   List<Task> get tasks => engine.tasks;
+  List<Habit> get habits => engine.habits;
+  List<HabitCheckIn> get habitCheckIns => engine.habitCheckIns;
+  List<PersonalConflict> get personalConflicts => engine.personalConflicts;
+  bool get personalSupported => engine.personalSupported;
+  bool get personalUpgradeRequired => engine.personalUpgradeRequired;
   AchievementState? get achievement => engine.achievement;
   bool get achievementsSupported => engine.achievementsSupported;
   List<SyncConflict> get conflicts => engine.conflicts;
@@ -127,7 +133,9 @@ class AppController extends ChangeNotifier {
         _serverUrl = (config['server_url'] as String?) ?? '';
       }
       _token = await _vault.read(key: _tokenKey) ?? '';
-      if (isConfigured) _transport.configure(_serverUrl, _token);
+      if (isConfigured) {
+        _transport.configure(_serverUrl, _token);
+      }
     } catch (error) {
       _setError(error);
       _serverUrl = '';
@@ -138,7 +146,9 @@ class AppController extends ChangeNotifier {
         unawaited(sync());
       }
     });
-    if (isConfigured) unawaited(sync());
+    if (isConfigured) {
+      unawaited(sync());
+    }
   }
 
   Future<void> _loadAppearance() async {
@@ -162,7 +172,9 @@ class AppController extends ChangeNotifier {
     TodoThemeColor appTheme,
     TodoThemeColor? widgetTheme,
   ) async {
-    if (_disposed || _savingAppearance) return false;
+    if (_disposed || _savingAppearance) {
+      return false;
+    }
     if (_appearance.appTheme == appTheme &&
         _appearance.widgetTheme == widgetTheme &&
         _appearanceError == null) {
@@ -189,7 +201,9 @@ class AppController extends ChangeNotifier {
   }
 
   Future<bool> setConnection(String url, String token) async {
-    if (busy) return false;
+    if (busy) {
+      return false;
+    }
     final normalizedUrl = url.trim().replaceFirst(RegExp(r'/+$'), '');
     final normalizedToken = token.trim();
     final uri = Uri.tryParse(normalizedUrl);
@@ -235,21 +249,42 @@ class AppController extends ChangeNotifier {
     return _edit(() => engine.saveTask(draft, id: id));
   }
 
+  Future<bool> saveHabit(HabitDraft draft, {String? id}) =>
+      _edit(() => engine.saveHabit(draft, id: id));
+  Future<bool> deleteHabit(String id) => _edit(() => engine.deleteHabit(id));
+  Future<bool> setHabitValue(String habitId, String date, int value) =>
+      _edit(() => engine.setHabitValue(habitId, date, value));
+  Future<bool> resolvePersonalConflict(
+    String kind,
+    String id, {
+    required bool keepLocal,
+  }) => _edit(
+    () => engine.resolvePersonalConflict(kind, id, keepLocal: keepLocal),
+  );
+
   Future<bool> setCompleted(String id, bool completed) async {
     return _edit(() async {
       final change = await engine.setCompleted(id, completed);
-      if (!completed || _disposed) return;
+      if (!completed || _disposed) {
+        return;
+      }
       final celebration = celebrationForCompletion(change, _clock());
-      if (celebration != null) await _queueCelebration(celebration);
+      if (celebration != null) {
+        await _queueCelebration(celebration);
+      }
     });
   }
 
   Future<void> _loadCelebration() => _loadingCelebration ??= () async {
     try {
       final saved = await _celebrationStore.read();
-      if (_disposed) return;
+      if (_disposed) {
+        return;
+      }
       final days = saved?['celebrated_days'];
-      if (days is List) _celebratedDays.addAll(days.whereType<String>());
+      if (days is List) {
+        _celebratedDays.addAll(days.whereType<String>());
+      }
       _pendingCelebration = DailyCelebration.fromJson(saved?['pending']);
     } catch (_) {
       // An unreadable encouragement preference must never disrupt task storage.
@@ -289,7 +324,9 @@ class AppController extends ChangeNotifier {
     _celebratedDays.add(celebration.day);
     try {
       await _writeCelebration(celebration);
-      if (!_disposed) _pendingCelebration = celebration;
+      if (!_disposed) {
+        _pendingCelebration = celebration;
+      }
     } catch (_) {
       // Task completion was already durably saved; don't report it as failed.
     }
@@ -306,7 +343,9 @@ class AppController extends ChangeNotifier {
     final pending = _pendingCelebration!;
     try {
       await _writeCelebration(null);
-      if (identical(_pendingCelebration, pending)) _pendingCelebration = null;
+      if (identical(_pendingCelebration, pending)) {
+        _pendingCelebration = null;
+      }
       // Another user action or midnight may occur while the preference flushes.
       final today = dateKey(_clock());
       final scheduled = tasks
@@ -321,7 +360,9 @@ class AppController extends ChangeNotifier {
           : null;
     } catch (_) {
       // Retry only on a future launch, never spin on every controller rebuild.
-      if (identical(_pendingCelebration, pending)) _pendingCelebration = null;
+      if (identical(_pendingCelebration, pending)) {
+        _pendingCelebration = null;
+      }
       return null;
     } finally {
       _claimingCelebration = false;
@@ -379,7 +420,9 @@ class AppController extends ChangeNotifier {
   }
 
   Future<bool> _edit(Future<void> Function() operation) async {
-    if (_disposed || _editing) return false;
+    if (_disposed || _editing) {
+      return false;
+    }
     _editing = true;
     _notify();
     try {
@@ -399,14 +442,20 @@ class AppController extends ChangeNotifier {
   void _scheduleSync() {
     _editTimer?.cancel();
     _editTimer = null;
-    if (_disposed || !isConfigured) return;
+    if (_disposed || !isConfigured) {
+      return;
+    }
     _editTimer = Timer(const Duration(milliseconds: 700), () {
-      if (isConfigured && !busy) unawaited(sync());
+      if (isConfigured && !busy) {
+        unawaited(sync());
+      }
     });
   }
 
   Future<void> sync() async {
-    if (_disposed || busy) return;
+    if (_disposed || busy) {
+      return;
+    }
     if (!isConfigured) {
       _error = '先在连接设置中填写 NAS 地址和访问令牌；本机待办仍然可以离线使用。';
       _notify();
@@ -430,12 +479,16 @@ class AppController extends ChangeNotifier {
 
   Future<void> waitForSync() async {
     final pending = _syncCompletion?.future;
-    if (pending != null) await pending;
+    if (pending != null) {
+      await pending;
+    }
   }
 
   void onResume() {
     _notify();
-    if (isConfigured && !busy) unawaited(sync());
+    if (isConfigured && !busy) {
+      unawaited(sync());
+    }
   }
 
   void clearError() {
@@ -449,12 +502,16 @@ class AppController extends ChangeNotifier {
 
   String _messageFor(Object error) {
     var message = error.toString();
-    if (_token.isNotEmpty) message = message.replaceAll(_token, '••••••');
+    if (_token.isNotEmpty) {
+      message = message.replaceAll(_token, '••••••');
+    }
     return message.replaceFirst(RegExp(r'^\w*Exception:\s*'), '');
   }
 
   void _notify() {
-    if (!_disposed) notifyListeners();
+    if (!_disposed) {
+      notifyListeners();
+    }
   }
 
   @override

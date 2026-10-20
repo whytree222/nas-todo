@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../app_controller.dart';
 import '../sync_core.dart';
+import 'task_repeat_options.dart';
 
 Future<void> showTaskEditor(
   BuildContext context,
@@ -11,6 +12,8 @@ Future<void> showTaskEditor(
   Task? task,
   String? listName,
   String? initialDueDate,
+  String? initialParentId,
+  List<String> initialTags = const [],
 }) {
   return showDialog<void>(
     context: context,
@@ -19,6 +22,8 @@ Future<void> showTaskEditor(
       task: task,
       initialListName: listName,
       initialDueDate: initialDueDate,
+      initialParentId: initialParentId,
+      initialTags: initialTags,
     ),
   );
 }
@@ -30,12 +35,16 @@ class TaskEditorDialog extends StatefulWidget {
     this.task,
     this.initialListName,
     this.initialDueDate,
+    this.initialParentId,
+    this.initialTags = const [],
   });
 
   final AppController controller;
   final Task? task;
   final String? initialListName;
   final String? initialDueDate;
+  final String? initialParentId;
+  final List<String> initialTags;
 
   @override
   State<TaskEditorDialog> createState() => _TaskEditorDialogState();
@@ -46,6 +55,12 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
   late final TextEditingController _title;
   late final TextEditingController _note;
   late final TextEditingController _list;
+  late final TextEditingController _tags;
+  late final TextEditingController _repeatInterval;
+  late final TextEditingController _repeatMonthDay;
+  String? _parentId;
+  String _repeatFrequency = 'none';
+  final Set<int> _repeatWeekdays = {};
   String? _dueDate;
   late int _priority;
   bool _saving = false;
@@ -68,10 +83,24 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
         ? widget.task!.dueDate
         : widget.initialDueDate;
     _priority = widget.task?.priority ?? 0;
+    _parentId = widget.task?.parentId ?? widget.initialParentId;
+    _tags = TextEditingController(
+      text: (widget.task?.tags ?? widget.initialTags).join('，'),
+    );
+    final repeat = widget.task?.repeatRule;
+    _repeatFrequency = repeat?.frequency ?? 'none';
+    _repeatInterval = TextEditingController(text: '${repeat?.interval ?? 1}');
+    _repeatMonthDay = TextEditingController(
+      text:
+          '${repeat?.monthDay ?? DateTime.tryParse(_dueDate ?? '')?.day ?? DateTime.now().day}',
+    );
+    _repeatWeekdays.addAll(repeat?.weekdays ?? const []);
   }
 
   void _refresh() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   List<String> get _availableLists {
@@ -89,7 +118,9 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
   }
 
   void _selectList(String name) {
-    if (_saving) return;
+    if (_saving) {
+      return;
+    }
     setState(() {
       _list.value = TextEditingValue(
         text: name,
@@ -104,6 +135,9 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
     _title.dispose();
     _note.dispose();
     _list.dispose();
+    _tags.dispose();
+    _repeatInterval.dispose();
+    _repeatMonthDay.dispose();
     super.dispose();
   }
 
@@ -111,8 +145,12 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
     final first = DateTime(2000);
     final last = DateTime(2100, 12, 31);
     var initial = DateTime.tryParse(_dueDate ?? '') ?? DateTime.now();
-    if (initial.isBefore(first)) initial = first;
-    if (initial.isAfter(last)) initial = last;
+    if (initial.isBefore(first)) {
+      initial = first;
+    }
+    if (initial.isAfter(last)) {
+      initial = last;
+    }
     final date = await showDatePicker(
       context: context,
       initialDate: initial,
@@ -130,14 +168,235 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
     }
   }
 
+  List<String> _parseTags() => _tags.text
+      .split(RegExp(r'[,，;；\n]'))
+      .map((tag) => tag.trim())
+      .where((tag) => tag.isNotEmpty)
+      .toSet()
+      .toList();
+
+  List<Task> get _possibleParents {
+    final excluded = <String>{if (widget.task != null) widget.task!.id};
+    var changed = true;
+    while (changed) {
+      changed = false;
+      for (final task in widget.controller.tasks) {
+        if (task.parentId != null &&
+            excluded.contains(task.parentId) &&
+            excluded.add(task.id)) {
+          changed = true;
+        }
+      }
+    }
+    return widget.controller.tasks
+        .where((task) => !excluded.contains(task.id))
+        .toList()
+      ..sort((a, b) => a.title.compareTo(b.title));
+  }
+
+  Widget _personalFields() {
+    final parents = _possibleParents;
+    final knownTags =
+        widget.controller.tasks.expand((task) => task.tags).toSet().toList()
+          ..sort();
+    return ExpansionTile(
+      key: const ValueKey('task-personal-options'),
+      tilePadding: EdgeInsets.zero,
+      initiallyExpanded:
+          widget.initialParentId != null ||
+          widget.task?.parentId != null ||
+          (widget.task?.tags.isNotEmpty ?? false) ||
+          widget.task?.repeatRule != null,
+      title: const Text('子任务、标签与重复'),
+      subtitle: Text(
+        _repeatFrequency == 'none'
+            ? '按需添加更多安排'
+            : taskRepeatLabel(
+                TaskRepeatRule(
+                  frequency: _repeatFrequency,
+                  interval: int.tryParse(_repeatInterval.text) ?? 1,
+                ),
+              ),
+      ),
+      children: [
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          key: const ValueKey('task-parent'),
+          initialValue: _parentId ?? 'none',
+          isExpanded: true,
+          decoration: const InputDecoration(
+            labelText: '父待办',
+            helperText: '不选择即为顶层待办，最多 5 层',
+          ),
+          items: [
+            const DropdownMenuItem(value: 'none', child: Text('无 · 顶层待办')),
+            if (_parentId != null &&
+                !parents.any((task) => task.id == _parentId))
+              DropdownMenuItem(
+                value: _parentId,
+                child: const Text('原父待办已删除，请重新选择'),
+              ),
+            for (final task in parents)
+              DropdownMenuItem(
+                value: task.id,
+                child: Text(
+                  task.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+          onChanged: _saving
+              ? null
+              : (value) =>
+                    setState(() => _parentId = value == 'none' ? null : value),
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          key: const ValueKey('task-tags'),
+          controller: _tags,
+          enabled: !_saving,
+          maxLength: 700,
+          decoration: InputDecoration(
+            labelText: '标签',
+            hintText: '用逗号分隔，例如：学习，阅读',
+            counterText: '',
+            suffixIcon: knownTags.isEmpty
+                ? null
+                : PopupMenuButton<String>(
+                    tooltip: '选择已有标签',
+                    onSelected: (tag) => setState(
+                      () => _tags.text = ({
+                        ..._parseTags(),
+                        tag,
+                      }.toList()..sort()).join('，'),
+                    ),
+                    itemBuilder: (_) => [
+                      for (final tag in knownTags)
+                        PopupMenuItem(value: tag, child: Text(tag)),
+                    ],
+                  ),
+          ),
+          validator: (_) {
+            final tags = _parseTags();
+            if (tags.length > 20 || tags.any((tag) => tag.runes.length > 30)) {
+              return '最多 20 个标签，每个标签不超过 30 字';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          key: const ValueKey('task-repeat'),
+          initialValue: _repeatFrequency,
+          decoration: const InputDecoration(labelText: '重复规则'),
+          items: const [
+            DropdownMenuItem(value: 'none', child: Text('不重复')),
+            DropdownMenuItem(value: 'daily', child: Text('按天重复')),
+            DropdownMenuItem(value: 'weekly', child: Text('按周重复')),
+            DropdownMenuItem(value: 'monthly', child: Text('按月重复')),
+          ],
+          onChanged: _saving
+              ? null
+              : (value) => setState(() {
+                  _repeatFrequency = value ?? 'none';
+                  if (_repeatFrequency == 'weekly' && _repeatWeekdays.isEmpty) {
+                    _repeatWeekdays.add(
+                      (DateTime.tryParse(_dueDate ?? '') ?? DateTime.now())
+                          .weekday,
+                    );
+                  }
+                }),
+        ),
+        if (_repeatFrequency != 'none') ...[
+          const SizedBox(height: 12),
+          TextFormField(
+            key: const ValueKey('task-repeat-interval'),
+            controller: _repeatInterval,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: '重复间隔',
+              helperText: '1–365，例如每 2 天、每 2 周或每 2 月',
+            ),
+            validator: (text) {
+              final value = int.tryParse(text ?? '');
+              return value == null || value < 1 || value > 365
+                  ? '填写 1–365'
+                  : null;
+            },
+          ),
+          if (_repeatFrequency == 'weekly')
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Wrap(
+                spacing: 5,
+                children: [
+                  for (var day = 1; day <= 7; day++)
+                    FilterChip(
+                      key: ValueKey('repeat-weekday-$day'),
+                      label: Text(
+                        const ['一', '二', '三', '四', '五', '六', '日'][day - 1],
+                      ),
+                      selected: _repeatWeekdays.contains(day),
+                      onSelected: (selected) => setState(() {
+                        if (selected) {
+                          _repeatWeekdays.add(day);
+                        } else {
+                          _repeatWeekdays.remove(day);
+                        }
+                      }),
+                    ),
+                ],
+              ),
+            ),
+          if (_repeatFrequency == 'monthly')
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: TextFormField(
+                key: const ValueKey('task-repeat-month-day'),
+                controller: _repeatMonthDay,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: '每月几日'),
+                validator: (text) {
+                  final value = int.tryParse(text ?? '');
+                  return value == null || value < 1 || value > 31
+                      ? '填写 1–31'
+                      : null;
+                },
+              ),
+            ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              '完成并同步后，由 NAS 生成下一次。月末不足指定日期时使用当月最后一天。',
+              style: TextStyle(fontSize: 12),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   Future<void> _save() async {
-    if (_saving || !_formKey.currentState!.validate()) return;
+    if (_saving || !_formKey.currentState!.validate()) {
+      return;
+    }
+    if (_repeatFrequency != 'none' && _dueDate == null) {
+      setState(() => _error = '重复待办需要先选择截止日期。');
+      return;
+    }
+    if (_repeatFrequency == 'weekly' && _repeatWeekdays.isEmpty) {
+      setState(() => _error = '请选择每周重复的星期。');
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
     });
     await widget.controller.waitForSync();
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     final original = widget.task;
     if (original != null && !_saveAsNew) {
       final matches = widget.controller.tasks.where(
@@ -174,10 +433,26 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
         dueDate: _dueDate,
         priority: _priority,
         completed: widget.task?.completed ?? false,
+        parentId: _parentId,
+        tags: _parseTags(),
+        repeatRule: _repeatFrequency == 'none'
+            ? null
+            : TaskRepeatRule(
+                frequency: _repeatFrequency,
+                interval: int.tryParse(_repeatInterval.text) ?? 1,
+                weekdays: _repeatFrequency == 'weekly'
+                    ? (_repeatWeekdays.toList()..sort())
+                    : const [],
+                monthDay: _repeatFrequency == 'monthly'
+                    ? int.tryParse(_repeatMonthDay.text)
+                    : null,
+              ),
       ),
       id: _saveAsNew ? null : widget.task?.id,
     );
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     if (saved) {
       Navigator.of(context).pop();
     } else {
@@ -204,7 +479,7 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
               color: colors.primary,
             ),
             const SizedBox(width: 12),
-            Text(widget.task == null ? '新建待办' : '编辑待办'),
+            Expanded(child: Text(widget.task == null ? '新建待办' : '编辑待办')),
           ],
         ),
         content: SizedBox(
@@ -315,6 +590,17 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
                   SizedBox(
                     width: double.infinity,
                     child: SegmentedButton<int>(
+                      showSelectedIcon: false,
+                      style: ButtonStyle(
+                        minimumSize: const WidgetStatePropertyAll(Size(0, 40)),
+                        padding: const WidgetStatePropertyAll(
+                          EdgeInsets.symmetric(horizontal: 6),
+                        ),
+                        textStyle: WidgetStatePropertyAll(
+                          Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(fontSize: 12),
+                        ),
+                      ),
                       segments: const [
                         ButtonSegment(value: 0, label: Text('普通')),
                         ButtonSegment(value: 1, label: Text('较高')),
@@ -327,6 +613,8 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
                                 setState(() => _priority = selection.first),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  _personalFields(),
                   if (_error != null) ...[
                     const SizedBox(height: 16),
                     Text(_error!, style: TextStyle(color: colors.error)),

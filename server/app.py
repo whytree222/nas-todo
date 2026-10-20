@@ -130,6 +130,12 @@ def require_text(value: Any, name: str, maximum: int, *, nonempty: bool = False)
 
 
 def validate_request(value: Any) -> dict[str, Any]:
+    deferred = False
+    if isinstance(value, dict) and set(value) == REQUEST_KEYS | {'defer_repeats'}:
+        if type(value['defer_repeats']) is not bool:
+            raise ApiError(400, 'invalid_request', 'defer_repeats must be a boolean')
+        deferred = value['defer_repeats']
+        value = {key: value[key] for key in REQUEST_KEYS}
     request = require_keys(value, REQUEST_KEYS, "request")
     instance_id = request["instance_id"]
     if instance_id is not None:
@@ -172,7 +178,7 @@ def validate_request(value: Any) -> dict[str, Any]:
             "data": {"title": title, "note": note, "list_name": list_name, "due_date": due_date,
                      "priority": data["priority"], "completed": data["completed"]},
         })
-    return {"instance_id": instance_id, "cursor": cursor, "operations": validated}
+    return {"instance_id": instance_id, "cursor": cursor, "operations": validated, 'defer_repeats': deferred}
 
 
 def row_to_task(row: sqlite3.Row | None) -> dict[str, Any] | None:
@@ -184,7 +190,268 @@ def row_to_task(row: sqlite3.Row | None) -> dict[str, Any] | None:
     return result
 
 
-class SyncService:
+class PersonalFeatures:
+    """Versioned sidecar collections keep the original six-field API compatible."""
+
+    def _initialize_personal(self, connection):
+        connection.execute('CREATE TABLE IF NOT EXISTS deferred_repeats (task_id TEXT PRIMARY KEY)')
+        connection.execute("CREATE TABLE IF NOT EXISTS personal_records (kind TEXT NOT NULL,id TEXT NOT NULL,data_json TEXT NOT NULL,deleted INTEGER NOT NULL,version INTEGER NOT NULL,updated_at TEXT NOT NULL,change_seq INTEGER NOT NULL UNIQUE,PRIMARY KEY(kind,id))")
+        connection.execute("CREATE TABLE IF NOT EXISTS personal_operations (op_id TEXT PRIMARY KEY,payload_hash TEXT NOT NULL,result_json TEXT NOT NULL)")
+        connection.execute("CREATE TABLE IF NOT EXISTS repeat_spawns (source_id TEXT PRIMARY KEY,next_id TEXT NOT NULL UNIQUE)")
+        connection.execute("INSERT OR IGNORE INTO metadata(key,value) VALUES('personal_cursor','0')")
+        used = connection.execute('SELECT coalesce(sum(length(cast(data_json AS BLOB))),0) FROM personal_records').fetchone()[0]
+        connection.execute("INSERT OR IGNORE INTO metadata(key,value) VALUES('personal_data_bytes',?)", (str(used),))
+
+    def _personal_row(self, row):
+        if row is None:
+            return None
+        return {"kind": row["kind"], "id": row["id"], "data": json.loads(row["data_json"]),
+                "deleted": bool(row["deleted"]), "version": row["version"],
+                "updated_at": row["updated_at"], "change_seq": row["change_seq"]}
+
+    def _put_personal(self, connection, kind, record_id, data, *, deleted=False):
+        old = connection.execute("SELECT * FROM personal_records WHERE kind=? AND id=?", (kind, record_id)).fetchone()
+        encoded = encode_json(data)
+        size = int(connection.execute("SELECT value FROM metadata WHERE key='personal_data_bytes'").fetchone()[0]) + len(encoded.encode('utf-8')) - (len(old['data_json'].encode('utf-8')) if old else 0)
+        if size > self.config.max_data_bytes or (old is None and connection.execute('SELECT count(*) FROM personal_records').fetchone()[0] >= 50000):
+            raise ApiError(409, 'capacity_exceeded', 'Personal data capacity reached; existing data is preserved')
+        cursor = int(connection.execute("SELECT value FROM metadata WHERE key='personal_cursor'").fetchone()[0]) + 1
+        connection.execute("INSERT INTO personal_records VALUES(?,?,?,?,?,?,?) ON CONFLICT(kind,id) DO UPDATE SET data_json=excluded.data_json,deleted=excluded.deleted,version=excluded.version,updated_at=excluded.updated_at,change_seq=excluded.change_seq",
+                           (kind, record_id, encoded, int(deleted), old["version"] + 1 if old else 1, utc_now(), cursor))
+        connection.execute("UPDATE metadata SET value=? WHERE key='personal_data_bytes'", (str(size),))
+        connection.execute("UPDATE metadata SET value=? WHERE key='personal_cursor'", (str(cursor),))
+        return self._personal_row(connection.execute("SELECT * FROM personal_records WHERE kind=? AND id=?", (kind, record_id)).fetchone())
+
+    def _personal_data(self, kind, value):
+        if kind == 'habit':
+            data = require_keys(value, {'name', 'goal_type', 'goal', 'weekdays'}, 'habit')
+            name = require_text(data['name'], 'name', 80, nonempty=True).strip()
+            if data['goal_type'] not in ('bool', 'count'):
+                raise ApiError(400, 'invalid_request', 'Invalid habit goal type')
+            goal = require_integer(data['goal'], 'goal')
+            if not 1 <= goal <= 100000 or (data['goal_type'] == 'bool' and goal != 1):
+                raise ApiError(400, 'invalid_request', 'Invalid habit goal')
+            return {'name': name, 'goal_type': data['goal_type'], 'goal': goal,
+                    'weekdays': self._weekdays(data['weekdays'], nonempty=True)}
+        if kind == 'habit_checkin':
+            data = require_keys(value, {'habit_id', 'date', 'value'}, 'checkin')
+            habit_id = require_uuid(data['habit_id'], 'habit_id')
+            day = self._personal_date(data['date'])
+            amount = require_integer(data['value'], 'value')
+            if amount > 100000:
+                raise ApiError(400, 'invalid_request', 'Check-in value too large')
+            return {'habit_id': habit_id, 'date': day, 'value': amount}
+        if kind != 'task_meta':
+            raise ApiError(400, 'invalid_request', 'Unknown personal collection')
+        data = require_keys(value, {'parent_id', 'tags', 'repeat_rule'}, 'task metadata')
+        parent = None if data['parent_id'] is None else require_uuid(data['parent_id'], 'parent_id')
+        if not isinstance(data['tags'], list) or len(data['tags']) > 20:
+            raise ApiError(400, 'invalid_request', 'At most 20 tags are allowed')
+        tags = sorted(set(require_text(tag, 'tag', 30, nonempty=True).strip() for tag in data['tags']))
+        repeat = data['repeat_rule']
+        if repeat is not None:
+            repeat = require_keys(repeat, {'frequency', 'interval', 'weekdays', 'month_day'}, 'repeat rule')
+            interval = require_integer(repeat['interval'], 'interval')
+            if repeat['frequency'] not in ('daily', 'weekly', 'monthly') or not 1 <= interval <= 365:
+                raise ApiError(400, 'invalid_request', 'Invalid repeat frequency or interval')
+            month_day = repeat['month_day']
+            if month_day is not None and (type(month_day) is not int or not 1 <= month_day <= 31):
+                raise ApiError(400, 'invalid_request', 'Invalid repeat month day')
+            repeat = {'frequency': repeat['frequency'], 'interval': interval,
+                      'weekdays': self._weekdays(repeat['weekdays']), 'month_day': month_day}
+        return {'parent_id': parent, 'tags': tags, 'repeat_rule': repeat}
+
+    def _personal_date(self, value):
+        if not isinstance(value, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', value):
+            raise ApiError(400, 'invalid_request', 'Invalid calendar date')
+        try:
+            dt.date.fromisoformat(value)
+        except ValueError:
+            raise ApiError(400, 'invalid_request', 'Invalid calendar date') from None
+        return value
+
+    def _weekdays(self, value, *, nonempty=False):
+        if not isinstance(value, list) or len(value) > 7 or any(type(v) is not int or not 1 <= v <= 7 for v in value) or (nonempty and not value):
+            raise ApiError(400, 'invalid_request', 'Invalid weekdays')
+        return sorted(set(value))
+
+    def _valid_personal_reference(self, connection, kind, record_id, data):
+        if kind == 'habit':
+            return True
+        if kind == 'habit_checkin':
+            habit = connection.execute("SELECT * FROM personal_records WHERE kind='habit' AND id=? AND deleted=0", (data['habit_id'],)).fetchone()
+            return habit is not None and record_id == data['habit_id'] + ':' + data['date'] and (json.loads(habit['data_json'])['goal_type'] != 'bool' or data['value'] <= 1)
+        task = connection.execute('SELECT * FROM tasks WHERE id=? AND deleted=0', (record_id,)).fetchone()
+        if task is None or (data['repeat_rule'] is not None and task['due_date'] is None):
+            return False
+        parent = data['parent_id']
+        seen = {record_id}
+        depth = 1
+        while parent is not None:
+            if parent in seen or depth >= 5:
+                return False
+            seen.add(parent)
+            if connection.execute('SELECT 1 FROM tasks WHERE id=? AND deleted=0', (parent,)).fetchone() is None:
+                # A parent deleted concurrently must not discard its child.
+                data['parent_id'] = None
+                return True
+            row = connection.execute("SELECT data_json FROM personal_records WHERE kind='task_meta' AND id=? AND deleted=0", (parent,)).fetchone()
+            parent = json.loads(row[0])['parent_id'] if row else None
+            depth += 1
+        # Reparenting an existing branch must also respect descendant depth.
+        parents = {row['id']: json.loads(row['data_json'])['parent_id'] for row in connection.execute("SELECT * FROM personal_records WHERE kind='task_meta' AND deleted=0")}
+        parents[record_id] = data['parent_id']
+        for child in parents:
+            current, chain = child, set()
+            while current is not None:
+                if current in chain or len(chain) >= 5:
+                    return False
+                chain.add(current)
+                current = parents.get(current)
+        return True
+
+    def _promote_orphans(self, connection):
+        for row in connection.execute("SELECT * FROM personal_records WHERE kind='task_meta' AND deleted=0").fetchall():
+            data = json.loads(row['data_json'])
+            parent = data['parent_id']
+            if parent is not None and connection.execute('SELECT 1 FROM tasks WHERE id=? AND deleted=0', (parent,)).fetchone() is None:
+                data['parent_id'] = None
+                self._put_personal(connection, 'task_meta', row['id'], data)
+
+    @staticmethod
+    def _next_repeat_date(day, rule):
+        if rule['frequency'] == 'daily':
+            return day + dt.timedelta(days=rule['interval'])
+        if rule['frequency'] == 'weekly':
+            weekdays = rule['weekdays'] or [day.isoweekday()]
+            for weekday in weekdays:
+                if weekday > day.isoweekday():
+                    return day + dt.timedelta(days=weekday - day.isoweekday())
+            return day + dt.timedelta(days=rule['interval'] * 7 - day.weekday() + weekdays[0] - 1)
+        index = day.year * 12 + day.month - 1 + rule['interval']
+        year, month = divmod(index, 12)
+        month += 1
+        first = dt.date(year, month, 1)
+        last = following_month(first) - dt.timedelta(days=1)
+        return dt.date(year, month, min(rule['month_day'] or day.day, last.day))
+
+    def _generate_repeats(self, connection):
+        generated = []
+        for row in connection.execute("SELECT t.*,p.data_json FROM tasks t JOIN personal_records p ON p.kind='task_meta' AND p.id=t.id AND p.deleted=0 LEFT JOIN repeat_spawns r ON r.source_id=t.id LEFT JOIN deferred_repeats d ON d.task_id=t.id WHERE t.deleted=0 AND t.completed=1 AND t.due_date IS NOT NULL AND r.source_id IS NULL AND d.task_id IS NULL").fetchall():
+            meta = json.loads(row['data_json'])
+            rule = meta['repeat_rule']
+            if rule is None:
+                continue
+            try:
+                next_day = self._next_repeat_date(dt.date.fromisoformat(row['due_date']), rule)
+            except (ValueError, OverflowError):
+                continue
+            if connection.execute('SELECT count(*) FROM tasks').fetchone()[0] >= self.config.max_tasks:
+                raise ApiError(409, 'capacity_exceeded', 'No capacity for the next repeated task')
+            next_id = str(uuid.uuid5(uuid.NAMESPACE_URL, 'nas-todo:repeat:' + row['id'] + ':' + row['due_date']))
+            data = {key: row[key] for key in DATA_KEYS}
+            data.update(completed=False, due_date=next_day.isoformat())
+            size = int(connection.execute("SELECT value FROM metadata WHERE key='data_bytes'").fetchone()[0]) + len(encode_json(data).encode('utf-8'))
+            if size > self.config.max_data_bytes:
+                raise ApiError(409, 'capacity_exceeded', 'No data capacity for the next repeated task')
+            cursor = int(connection.execute("SELECT value FROM metadata WHERE key='cursor'").fetchone()[0]) + 1
+            connection.execute('INSERT INTO tasks VALUES(?,?,?,?,?,?,0,0,1,?,?)', (next_id, row['title'], row['note'], row['list_name'], next_day.isoformat(), row['priority'], utc_now(), cursor))
+            connection.execute("UPDATE metadata SET value=? WHERE key='cursor'", (str(cursor),))
+            connection.execute("UPDATE metadata SET value=? WHERE key='data_bytes'", (str(size),))
+            connection.execute('INSERT INTO repeat_spawns VALUES(?,?)', (row['id'], next_id))
+            if rule['frequency'] == 'monthly' and rule['month_day'] is None:
+                meta = {**meta, 'repeat_rule': {**rule, 'month_day': dt.date.fromisoformat(row['due_date']).day}}
+            self._put_personal(connection, 'task_meta', next_id, meta)
+            generated.append(row_to_task(connection.execute('SELECT * FROM tasks WHERE id=?', (next_id,)).fetchone()))
+        return generated
+
+    def sync_personal(self, value):
+        release_tasks = []
+        if isinstance(value, dict) and set(value) == REQUEST_KEYS | {'release_tasks'}:
+            if not isinstance(value['release_tasks'], list) or len(value['release_tasks']) > 100:
+                raise ApiError(400, 'invalid_request', 'At most 100 repeat releases are allowed')
+            release_tasks = list(dict.fromkeys(require_uuid(item, 'release task') for item in value['release_tasks']))
+            value = {key: value[key] for key in REQUEST_KEYS}
+        request = require_keys(value, REQUEST_KEYS, 'personal request')
+        cursor = require_integer(request['cursor'], 'cursor')
+        instance = request['instance_id']
+        if instance is not None:
+            instance = require_uuid(instance, 'instance_id')
+        raw_ops = request['operations']
+        if not isinstance(raw_ops, list) or len(raw_ops) > MAX_OPERATIONS:
+            raise ApiError(400, 'invalid_request', 'At most 100 personal operations are allowed')
+        ops, seen = [], set()
+        for raw in raw_ops:
+            op = require_keys(raw, {'op_id', 'kind', 'id', 'base_version', 'action', 'data'}, 'personal operation')
+            op_id = require_uuid(op['op_id'], 'op_id')
+            if op_id in seen:
+                raise ApiError(400, 'duplicate_operation', 'Duplicate operation')
+            seen.add(op_id)
+            kind = op['kind']
+            if kind not in ('task_meta', 'habit', 'habit_checkin'):
+                raise ApiError(400, 'invalid_request', 'Unknown collection')
+            record_id = require_text(op['id'], 'id', 100, nonempty=True)
+            if kind != 'habit_checkin':
+                record_id = require_uuid(record_id, 'id')
+            base = require_integer(op['base_version'], 'base_version')
+            if op['action'] not in ('upsert', 'delete') or (kind == 'task_meta' and op['action'] == 'delete'):
+                raise ApiError(400, 'invalid_request', 'Invalid personal action')
+            data = self._personal_data(kind, op['data'])
+            ops.append({'op_id': op_id, 'kind': kind, 'id': record_id, 'base_version': base, 'action': op['action'], 'data': data})
+        connection = self.connect()
+        try:
+            connection.execute('BEGIN IMMEDIATE')
+            metadata = dict(connection.execute('SELECT key,value FROM metadata'))
+            if instance != metadata['instance_id']:
+                raise ApiError(409, 'instance_mismatch', 'Personal sync must bind to the same NAS database')
+            if cursor > int(metadata['personal_cursor']):
+                raise ApiError(409, 'future_cursor', 'Personal cursor ahead of database')
+            # Validate every reused op id before applying any write in this batch.
+            history, hashes = {}, {}
+            for op in ops:
+                digest = hashlib.sha256(encode_json(op).encode('utf-8')).hexdigest()
+                previous = connection.execute('SELECT * FROM personal_operations WHERE op_id=?', (op['op_id'],)).fetchone()
+                if previous is not None and previous['payload_hash'] != digest:
+                    raise ApiError(409, 'op_id_reused', 'Personal operation id reused with another payload')
+                history[op['op_id']], hashes[op['op_id']] = previous, digest
+            results = []
+            for op in ops:
+                previous = history[op['op_id']]
+                if previous is not None:
+                    results.append(json.loads(previous['result_json']))
+                    continue
+                old = connection.execute('SELECT * FROM personal_records WHERE kind=? AND id=?', (op['kind'], op['id'])).fetchone()
+                match = (old is None and op['base_version'] == 0 and op['action'] == 'upsert') or (old is not None and not old['deleted'] and old['version'] == op['base_version'])
+                valid = op['action'] == 'delete' or self._valid_personal_reference(connection, op['kind'], op['id'], op['data'])
+                equivalent = old is not None and not old['deleted'] and op['action'] == 'upsert' and encode_json(op['data']) == old['data_json']
+                if equivalent and valid:
+                    result = {'op_id': op['op_id'], 'status': 'applied', 'record': self._personal_row(old)}
+                elif not match or not valid:
+                    result = {'op_id': op['op_id'], 'status': 'conflict', 'record': self._personal_row(old)}
+                else:
+                    data = json.loads(old['data_json']) if op['action'] == 'delete' else op['data']
+                    record = self._put_personal(connection, op['kind'], op['id'], data, deleted=op['action'] == 'delete')
+                    result = {'op_id': op['op_id'], 'status': 'applied', 'record': record}
+                connection.execute('INSERT INTO personal_operations VALUES(?,?,?)', (op['op_id'], hashes[op['op_id']], encode_json(result)))
+                results.append(result)
+            blocked = {op['id'] for op, result in zip(ops, results) if op['kind'] == 'task_meta' and result['status'] == 'conflict'}
+            released = [record_id for record_id in release_tasks if record_id not in blocked]
+            for record_id in released:
+                connection.execute('DELETE FROM deferred_repeats WHERE task_id=?', (record_id,))
+            self._promote_orphans(connection)
+            generated = self._generate_repeats(connection)
+            changes = [self._personal_row(row) for row in connection.execute('SELECT * FROM personal_records WHERE change_seq>? ORDER BY change_seq', (cursor,))]
+            latest = int(connection.execute("SELECT value FROM metadata WHERE key='personal_cursor'").fetchone()[0])
+            connection.commit()
+            return {'instance_id': instance, 'cursor': latest, 'changes': changes, 'results': results, 'generated_tasks': generated, 'released_tasks': released}
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+
+class SyncService(PersonalFeatures):
     def __init__(self, config: Config, *, clock=None) -> None:
         config.validate()
         self.config = config
@@ -235,6 +502,7 @@ class SyncService:
             month = self.clock().strftime('%Y-%m')
             connection.execute("INSERT OR IGNORE INTO metadata(key,value) VALUES('achievement_start_month',?)", (month,))
             connection.execute("INSERT OR IGNORE INTO metadata(key,value) VALUES('achievement_next_month',?)", (month,))
+            self._initialize_personal(connection)
             connection.execute("PRAGMA user_version=1")
             connection.commit()
         except BaseException:
@@ -260,6 +528,9 @@ class SyncService:
                                (next_month, encode_json(report)))
             for task in cleaned:
                 # Archive first, then emit ordinary versioned tombstones to both clients.
+                personal = connection.execute("SELECT data_json FROM personal_records WHERE kind='task_meta' AND id=? AND deleted=0", (task['id'],)).fetchone()
+                if personal is not None:
+                    task['personal_metadata'] = json.loads(personal[0])
                 connection.execute("INSERT INTO achievement_archive(month,task_id,task_json) VALUES(?,?,?)",
                                    (next_month, task['id'], encode_json(task)))
                 cursor += 1
@@ -274,6 +545,7 @@ class SyncService:
         try:
             connection.execute('BEGIN IMMEDIATE')
             self._settle_locked(connection, self.clock())
+            self._promote_orphans(connection)
             connection.commit()
         except BaseException:
             connection.rollback()
@@ -371,14 +643,20 @@ class SyncService:
                              data["priority"], int(data["completed"]), version, updated_at, cursor))
                     result = {"op_id": op_id, "status": "applied",
                               "task": row_to_task(connection.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone())}
+                    if request['defer_repeats'] and operation['action'] == 'upsert':
+                        connection.execute('INSERT OR IGNORE INTO deferred_repeats VALUES(?)', (task_id,))
                 connection.execute("INSERT INTO operations(op_id,payload_hash,result_json,created_at) VALUES(?,?,?,?)",
                                    (op_id, hashes[op_id], encode_json(result), utc_now()))
                 results.append(result)
             connection.execute("UPDATE metadata SET value=? WHERE key='cursor'", (str(cursor),))
             connection.execute("UPDATE metadata SET value=? WHERE key='data_bytes'", (str(data_bytes),))
+            self._promote_orphans(connection)
+            self._generate_repeats(connection)
+            cursor = int(connection.execute("SELECT value FROM metadata WHERE key='cursor'").fetchone()[0])
             changes = [row_to_task(row) for row in connection.execute(
                 "SELECT * FROM tasks WHERE change_seq>? ORDER BY change_seq", (request["cursor"],))]
             response = {"instance_id": instance_id, "cursor": cursor, "changes": changes, "results": results}
+            response['personal_sync'] = 1
             response['achievement'] = self._achievement_state(connection)
             connection.commit()
             return response
@@ -486,7 +764,7 @@ class SyncHandler(BaseHTTPRequestHandler):
 
     def handle_expect_100(self) -> bool:
         try:
-            if self.path != "/api/sync":
+            if self.path not in ("/api/sync", "/api/personal-sync"):
                 raise ApiError(404, "not_found", "Route not found")
             self.authorize_and_length()
         except ApiError as error:
@@ -531,7 +809,7 @@ class SyncHandler(BaseHTTPRequestHandler):
                                    parse_constant=lambda _: (_ for _ in ()).throw(ValueError("Invalid JSON number")))
             except (ValueError, UnicodeDecodeError, RecursionError):
                 raise ApiError(400, "invalid_json", "Body must be valid UTF-8 JSON") from None
-            self.send_json(200, self.server.service.sync(value))  # type: ignore[attr-defined]
+            self.send_json(200, (self.server.service.sync_personal(value) if self.path == "/api/personal-sync" else self.server.service.sync(value)))  # type: ignore[attr-defined]
         except ApiError as error:
             self.send_api_error(error)
             if not body_read_started:

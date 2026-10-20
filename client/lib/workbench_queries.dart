@@ -39,6 +39,7 @@ List<Task> queryWorkbenchTasks(
   DateTime? now,
   String query = '',
   String? listName,
+  String? tag,
   int? priority,
   String sort = 'due',
 }) {
@@ -52,12 +53,19 @@ List<Task> queryWorkbenchTasks(
         (view == SmartTaskView.completed ? !task.completed : task.completed)) {
       return false;
     }
-    if (listName != null && task.listName != listName) return false;
-    if (priority != null && task.priority != priority) return false;
+    if (listName != null && task.listName != listName) {
+      return false;
+    }
+    if (tag != null && !task.tags.contains(tag)) {
+      return false;
+    }
+    if (priority != null && task.priority != priority) {
+      return false;
+    }
     if (text.isNotEmpty &&
-        !'${task.title}\n${task.note}\n${task.listName}'.toLowerCase().contains(
-          text,
-        )) {
+        !'${task.title}\n${task.note}\n${task.listName}\n${task.tags.join(' ')}'
+            .toLowerCase()
+            .contains(text)) {
       return false;
     }
     return switch (view) {
@@ -92,18 +100,28 @@ int compareWorkbenchTasks(Task a, Task b, {String sort = 'due'}) {
     'updated' || 'recent' => b.updatedAt.compareTo(a.updatedAt),
     _ => due != 0 ? due : priority,
   };
-  if (first != 0) return first;
-  if (title != 0) return title;
+  if (first != 0) {
+    return first;
+  }
+  if (title != 0) {
+    return title;
+  }
   return a.id.compareTo(b.id);
 }
 
 WorkbenchDueBucket workbenchDueBucket(Task task, {DateTime? now}) {
   final due = task.dueDate;
-  if (due == null) return WorkbenchDueBucket.unscheduled;
+  if (due == null) {
+    return WorkbenchDueBucket.unscheduled;
+  }
   final day = now ?? DateTime.now();
   final today = dateKey(day);
-  if (due.compareTo(today) < 0) return WorkbenchDueBucket.overdue;
-  if (due == today) return WorkbenchDueBucket.today;
+  if (due.compareTo(today) < 0) {
+    return WorkbenchDueBucket.overdue;
+  }
+  if (due == today) {
+    return WorkbenchDueBucket.today;
+  }
   if (due == dateKey(DateTime(day.year, day.month, day.day + 1))) {
     return WorkbenchDueBucket.tomorrow;
   }
@@ -122,7 +140,9 @@ Map<WorkbenchDueBucket, List<Task>> groupWorkbenchTasksByDueDate(
   };
   final day = now ?? DateTime.now();
   for (final task in tasks) {
-    if (!task.deleted) result[workbenchDueBucket(task, now: day)]!.add(task);
+    if (!task.deleted) {
+      result[workbenchDueBucket(task, now: day)]!.add(task);
+    }
   }
   for (final entries in result.values) {
     entries.sort(compareWorkbenchTasks);

@@ -5,6 +5,10 @@ import '../app_controller.dart';
 import '../desktop_window.dart';
 import '../sync_core.dart';
 import '../task_dates.dart';
+import '../task_tree.dart';
+import 'habits_screen.dart';
+import 'task_repeat_options.dart';
+import 'personal_conflict_dialog.dart';
 import '../workbench_queries.dart';
 import 'calendar_screen.dart';
 import 'achievements_screen.dart';
@@ -33,7 +37,7 @@ class _HomeScreenState extends State<HomeScreen>
   bool _celebrationScheduled = false;
   bool _celebrationShowing = false;
   ModalRoute<dynamic>? _observedRoute;
-  static const _titles = ['全部待办', '今天', '已完成', '日历', '连接设置', '成就'];
+  static const _titles = ['全部待办', '今天', '已完成', '日历', '连接设置', '成就', '习惯'];
   DateTime? _calendarDate = DateTime.now();
   Future<void> _openWidget() async {
     try {
@@ -51,6 +55,7 @@ class _HomeScreenState extends State<HomeScreen>
     widget.controller,
     listName: _selectedList,
     initialDueDate: _newDueDate,
+    initialTags: _selectedTag == null ? const [] : [_selectedTag!],
   );
 
   @override
@@ -68,7 +73,9 @@ class _HomeScreenState extends State<HomeScreen>
     if (route != _observedRoute) {
       dailyCelebrationRouteObserver.unsubscribe(this);
       _observedRoute = route;
-      if (route != null) dailyCelebrationRouteObserver.subscribe(this, route);
+      if (route != null) {
+        dailyCelebrationRouteObserver.subscribe(this, route);
+      }
     }
     _scheduleCelebration();
   }
@@ -96,10 +103,16 @@ class _HomeScreenState extends State<HomeScreen>
     _celebrationScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _celebrationScheduled = false;
-      if (!mounted || _celebrationShowing || widget.controller.editing) return;
+      if (!mounted || _celebrationShowing || widget.controller.editing) {
+        return;
+      }
       final lifecycle = WidgetsBinding.instance.lifecycleState;
-      if (lifecycle != null && lifecycle != AppLifecycleState.resumed) return;
-      if (ModalRoute.of(context)?.isCurrent != true) return;
+      if (lifecycle != null && lifecycle != AppLifecycleState.resumed) {
+        return;
+      }
+      if (ModalRoute.of(context)?.isCurrent != true) {
+        return;
+      }
       final pendingAtStart = widget.controller.pendingDailyCelebration;
       _celebrationShowing = true;
       try {
@@ -156,6 +169,8 @@ class _HomeScreenState extends State<HomeScreen>
   String _presentation = 'list';
   int? _priorityFilter;
   String? _selectedTaskId;
+  String? _selectedTag;
+  final _collapsedTasks = <String>{};
   bool _detailVisible = true;
   final _quickTitle = TextEditingController();
   final _quickFocus = FocusNode();
@@ -168,6 +183,7 @@ class _HomeScreenState extends State<HomeScreen>
   void _selectPage(int index) {
     setState(() {
       _page = index;
+      _selectedTag = null;
       _selectedList = null;
       _selectedTaskId = null;
       _smartView = index == 1
@@ -185,6 +201,7 @@ class _HomeScreenState extends State<HomeScreen>
           : view == SmartTaskView.completed
           ? 2
           : 0;
+      _selectedTag = null;
       _smartView = view;
       _selectedList = listName;
       _selectedTaskId = null;
@@ -198,6 +215,7 @@ class _HomeScreenState extends State<HomeScreen>
     view: _smartView,
     query: _search.text,
     listName: _selectedList,
+    tag: _selectedTag,
     priority: _priorityFilter,
     sort: _sort,
   );
@@ -216,8 +234,15 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   String get _heading {
-    if (_selectedList != null) return _selectedList!;
-    if (!_taskPage) return _titles[_page];
+    if (_selectedTag != null) {
+      return '#$_selectedTag';
+    }
+    if (_selectedList != null) {
+      return _selectedList!;
+    }
+    if (!_taskPage) {
+      return _titles[_page];
+    }
     return switch (_smartView) {
       SmartTaskView.all => '全部待办',
       SmartTaskView.inbox => '收件箱',
@@ -246,22 +271,29 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _quickAdd() async {
     final title = _quickTitle.text.trim();
-    if (title.isEmpty || _quickSaving || widget.controller.editing) return;
+    if (title.isEmpty || _quickSaving || widget.controller.editing) {
+      return;
+    }
     setState(() => _quickSaving = true);
     final saved = await widget.controller.saveTask(
       TaskDraft(
         title: title,
         listName: _selectedList ?? '收件箱',
         dueDate: _newDueDate,
+        tags: _selectedTag == null ? const [] : [_selectedTag!],
         priority: _smartView == SmartTaskView.important
             ? 1
             : _priorityFilter ?? 0,
       ),
     );
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _quickSaving = false;
-      if (saved) _quickTitle.clear();
+      if (saved) {
+        _quickTitle.clear();
+      }
     });
     if (saved) {
       _quickFocus.requestFocus();
@@ -279,7 +311,7 @@ class _HomeScreenState extends State<HomeScreen>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('删除这条待办？'),
-        content: Text('“${task.title}”会从本机移除，并在下一次同步时从其他设备移除。'),
+        content: Text('“${task.title}”会从本机移除，并在下一次同步时从其他设备移除。子任务会保留为顶层待办。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -292,7 +324,9 @@ class _HomeScreenState extends State<HomeScreen>
         ],
       ),
     );
-    if (confirmed == true) await widget.controller.deleteTask(task.id);
+    if (confirmed == true) {
+      await widget.controller.deleteTask(task.id);
+    }
   }
 
   @override
@@ -300,7 +334,9 @@ class _HomeScreenState extends State<HomeScreen>
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyN, control: true): () {
-          if (widget.controller.editing) return;
+          if (widget.controller.editing) {
+            return;
+          }
           if (_taskPage) {
             _quickFocus.requestFocus();
           } else {
@@ -313,7 +349,9 @@ class _HomeScreenState extends State<HomeScreen>
           } else {
             _selectPage(0);
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && _taskPage) _searchFocus.requestFocus();
+              if (mounted && _taskPage) {
+                _searchFocus.requestFocus();
+              }
             });
           }
         },
@@ -338,6 +376,7 @@ class _HomeScreenState extends State<HomeScreen>
               final details = canShowDetails && _detailVisible;
               final colors = Theme.of(context).colorScheme;
               final tasks = _visibleTasks();
+              final rows = taskTreeRows(tasks, collapsed: _collapsedTasks);
               Task? selected;
               for (final task in widget.controller.tasks) {
                 if (task.id == _selectedTaskId && !task.deleted) {
@@ -363,7 +402,19 @@ class _HomeScreenState extends State<HomeScreen>
                               _header(wide),
                               if (widget.controller.error != null)
                                 _errorBanner(),
-                              if (_page == 5)
+                              if (widget.controller.personalUpgradeRequired ||
+                                  widget
+                                      .controller
+                                      .personalConflicts
+                                      .isNotEmpty)
+                                _personalBanner(),
+                              if (_page == 6)
+                                Expanded(
+                                  child: HabitsScreen(
+                                    controller: widget.controller,
+                                  ),
+                                )
+                              else if (_page == 5)
                                 Expanded(
                                   child: Padding(
                                     padding: const EdgeInsets.symmetric(
@@ -428,7 +479,7 @@ class _HomeScreenState extends State<HomeScreen>
                                             wide ? 22 : 12,
                                             96,
                                           ),
-                                          itemCount: tasks.length,
+                                          itemCount: rows.length,
                                           separatorBuilder: (_, index) =>
                                               Divider(
                                                 height: 1,
@@ -437,7 +488,8 @@ class _HomeScreenState extends State<HomeScreen>
                                                     .withValues(alpha: 0.5),
                                               ),
                                           itemBuilder: (context, index) {
-                                            final task = tasks[index];
+                                            final row = rows[index];
+                                            final task = row.task;
                                             final conflict = widget
                                                 .controller
                                                 .conflicts
@@ -447,6 +499,29 @@ class _HomeScreenState extends State<HomeScreen>
                                                 );
                                             return _WorkbenchTaskRow(
                                               task: task,
+                                              depth: row.depth,
+                                              childCount: row.childCount,
+                                              collapsed: _collapsedTasks
+                                                  .contains(task.id),
+                                              onExpand: () => setState(() {
+                                                if (!_collapsedTasks.add(
+                                                  task.id,
+                                                )) {
+                                                  _collapsedTasks.remove(
+                                                    task.id,
+                                                  );
+                                                }
+                                              }),
+                                              onAddSubtask: () =>
+                                                  showTaskEditor(
+                                                    context,
+                                                    widget.controller,
+                                                    initialParentId: task.id,
+                                                    listName: task.listName,
+                                                    initialDueDate:
+                                                        task.dueDate,
+                                                    initialTags: task.tags,
+                                                  ),
                                               today: _today,
                                               conflict: conflict,
                                               selected:
@@ -485,10 +560,14 @@ class _HomeScreenState extends State<HomeScreen>
                           controller: widget.controller,
                           task: selected,
                           onEdit: () {
-                            if (selected != null) _editTask(selected);
+                            if (selected != null) {
+                              _editTask(selected);
+                            }
                           },
                           onDelete: () {
-                            if (selected != null) _deleteTask(selected);
+                            if (selected != null) {
+                              _deleteTask(selected);
+                            }
                           },
                           onClose: () => setState(() {
                             _selectedTaskId = null;
@@ -509,7 +588,7 @@ class _HomeScreenState extends State<HomeScreen>
                     ? null
                     : NavigationBar(
                         height: 68,
-                        selectedIndex: _page == 5 ? 0 : _page,
+                        selectedIndex: _page >= 5 ? 0 : _page,
                         onDestinationSelected: _selectPage,
                         destinations: const [
                           NavigationDestination(
@@ -590,6 +669,12 @@ class _HomeScreenState extends State<HomeScreen>
             () => _selectPage(3),
           ),
           item(
+            Icons.local_florist_outlined,
+            '习惯',
+            _page == 6,
+            () => _selectPage(6),
+          ),
+          item(
             Icons.workspace_premium_outlined,
             '成就',
             _page == 5,
@@ -613,7 +698,9 @@ class _HomeScreenState extends State<HomeScreen>
     final colors = Theme.of(context).colorScheme;
     void choose(VoidCallback action) {
       action();
-      if (drawer) Navigator.of(context).pop();
+      if (drawer) {
+        Navigator.of(context).pop();
+      }
     }
 
     int count(SmartTaskView view, {String? name}) => queryWorkbenchTasks(
@@ -624,7 +711,10 @@ class _HomeScreenState extends State<HomeScreen>
     Widget smart(String label, IconData icon, SmartTaskView view) => _navItem(
       label,
       icon,
-      _taskPage && _smartView == view && _selectedList == null,
+      _taskPage &&
+          _smartView == view &&
+          _selectedList == null &&
+          _selectedTag == null,
       count(view),
       () => choose(() => _selectSmart(view)),
     );
@@ -698,8 +788,40 @@ class _HomeScreenState extends State<HomeScreen>
                       () => _selectSmart(SmartTaskView.all, listName: list),
                     ),
                   ),
+                if (widget.controller.tasks.any(
+                  (task) => task.tags.isNotEmpty,
+                )) ...[
+                  const SizedBox(height: 20),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Text('标签', style: TextStyle(fontSize: 11)),
+                  ),
+                  for (final tag
+                      in (widget.controller.tasks
+                          .expand((task) => task.tags)
+                          .toSet()
+                          .toList()
+                        ..sort()))
+                    _navItem(
+                      '#$tag',
+                      Icons.sell_outlined,
+                      _selectedTag == tag,
+                      null,
+                      () => choose(() {
+                        _selectSmart(SmartTaskView.all);
+                        setState(() => _selectedTag = tag);
+                      }),
+                    ),
+                ],
                 if (drawer) ...[
                   const Divider(height: 30),
+                  _navItem(
+                    '习惯',
+                    Icons.local_florist_outlined,
+                    _page == 6,
+                    null,
+                    () => choose(() => _selectPage(6)),
+                  ),
                   _navItem(
                     '成就',
                     Icons.workspace_premium_outlined,
@@ -839,9 +961,11 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _syncStatus() {
     final controller = widget.controller;
     final colors = Theme.of(context).colorScheme;
-    final conflict = controller.conflicts.isNotEmpty;
+    final conflict =
+        controller.conflicts.isNotEmpty ||
+        controller.personalConflicts.isNotEmpty;
     final label = conflict
-        ? '${controller.conflicts.length} 项需要选择版本'
+        ? '${controller.conflicts.length + controller.personalConflicts.length} 项需要选择版本'
         : controller.syncing
         ? '正在与 NAS 同步'
         : !controller.isConfigured
@@ -857,7 +981,11 @@ class _HomeScreenState extends State<HomeScreen>
       borderRadius: BorderRadius.circular(4),
       onTap: () {
         if (conflict) {
-          showConflictDialog(context, controller);
+          if (controller.conflicts.isNotEmpty) {
+            showConflictDialog(context, controller);
+          } else {
+            showPersonalConflictDialog(context, controller);
+          }
         } else if (!controller.isConfigured) {
           _selectPage(4);
         } else if (!controller.busy) {
@@ -898,6 +1026,48 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _personalBanner() {
+    final conflicts = widget.controller.personalConflicts.length;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: Theme.of(context).colorScheme.secondaryContainer,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              conflicts > 0
+                  ? '$conflicts 项个人数据需要选择保留版本'
+                  : '新增的标签、子任务或习惯已保存在本机；请升级 NAS 后继续同步。',
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+          TextButton(
+            onPressed: conflicts > 0
+                ? () => showPersonalConflictDialog(context, widget.controller)
+                : () => showDialog<void>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('升级 NAS 个人功能服务'),
+                      content: const SingleChildScrollView(
+                        child: Text(
+                          '先在手机和电脑同步并备份。下载 v0.10.0 的 NAS 升级说明，在原 Docker 项目替换服务代码或更新部署包，保留原来的 .env、访问令牌和 data 目录。升级完成后回到应用同步；本机等待上传的个人数据会继续上传。',
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('知道了'),
+                        ),
+                      ],
+                    ),
+                  ),
+            child: Text(conflicts > 0 ? '处理冲突' : '升级说明'),
+          ),
+        ],
       ),
     );
   }
@@ -969,27 +1139,37 @@ class _HomeScreenState extends State<HomeScreen>
                   style: ButtonStyle(
                     visualDensity: VisualDensity.compact,
                     textStyle: WidgetStatePropertyAll(
-                      Theme.of(context).textTheme.labelLarge?.copyWith(fontSize: 11),
+                      Theme.of(context).textTheme.labelLarge
+                          ?.copyWith(fontSize: 11),
                     ),
                     padding: const WidgetStatePropertyAll(
                       EdgeInsets.symmetric(horizontal: 8),
                     ),
                   ),
-                  segments: const [
+                  segments: [
                     ButtonSegment(
                       value: 'list',
-                      icon: Icon(Icons.format_list_bulleted_rounded, size: 15),
-                      label: Text('列表'),
+                      icon: MediaQuery.textScalerOf(context).scale(11) > 15
+                          ? null
+                          : const Icon(
+                              Icons.format_list_bulleted_rounded,
+                              size: 15,
+                            ),
+                      label: const Text('列表'),
                     ),
                     ButtonSegment(
                       value: 'board',
-                      icon: Icon(Icons.view_kanban_outlined, size: 15),
-                      label: Text('看板'),
+                      icon: MediaQuery.textScalerOf(context).scale(11) > 15
+                          ? null
+                          : const Icon(Icons.view_kanban_outlined, size: 15),
+                      label: const Text('看板'),
                     ),
                     ButtonSegment(
                       value: 'matrix',
-                      icon: Icon(Icons.grid_view_rounded, size: 15),
-                      label: Text('四象限'),
+                      icon: MediaQuery.textScalerOf(context).scale(11) > 15
+                          ? null
+                          : const Icon(Icons.grid_view_rounded, size: 15),
+                      label: const Text('四象限'),
                     ),
                   ],
                   selected: {_presentation},
@@ -1002,7 +1182,9 @@ class _HomeScreenState extends State<HomeScreen>
                 tooltip: '排序与筛选',
                 icon: const Icon(Icons.tune_rounded, size: 20),
                 onSelected: (value) => setState(() {
-                  if (value.startsWith('sort:')) _sort = value.substring(5);
+                  if (value.startsWith('sort:')) {
+                    _sort = value.substring(5);
+                  }
                   if (value.startsWith('priority:')) {
                     _priorityFilter = int.tryParse(value.substring(9));
                   }
@@ -1209,8 +1391,18 @@ class _WorkbenchTaskRow extends StatelessWidget {
     required this.onDelete,
     required this.onConflict,
     this.onSelect,
+    required this.onAddSubtask,
+    required this.onExpand,
+    this.depth = 0,
+    this.childCount = 0,
+    this.collapsed = false,
   });
   final Task task;
+  final int depth;
+  final int childCount;
+  final bool collapsed;
+  final VoidCallback onAddSubtask;
+  final VoidCallback onExpand;
   final String today;
   final bool conflict;
   final bool busy;
@@ -1250,6 +1442,23 @@ class _WorkbenchTaskRow extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (depth > 0) SizedBox(width: depth * 18.0),
+              if (childCount > 0)
+                SizedBox(
+                  width: 24,
+                  child: IconButton(
+                    key: ValueKey('task-expand-${task.id}'),
+                    tooltip: collapsed ? '展开子任务' : '收起子任务',
+                    padding: EdgeInsets.zero,
+                    onPressed: onExpand,
+                    icon: Icon(
+                      collapsed
+                          ? Icons.chevron_right_rounded
+                          : Icons.expand_more_rounded,
+                      size: 19,
+                    ),
+                  ),
+                ),
               SizedBox(
                 width: 40,
                 height: 40,
@@ -1318,6 +1527,27 @@ class _WorkbenchTaskRow extends StatelessWidget {
                               color: colors.onSurfaceVariant,
                             ),
                           ),
+                          if (task.parentId != null)
+                            const Icon(
+                              Icons.subdirectory_arrow_right_rounded,
+                              size: 12,
+                            ),
+                          for (final tag in task.tags)
+                            Text(
+                              '#$tag',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: colors.primary,
+                              ),
+                            ),
+                          if (task.repeatRule != null)
+                            Text(
+                              taskRepeatLabel(task.repeatRule),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: colors.primary,
+                              ),
+                            ),
                           if (task.priority > 0)
                             Row(
                               mainAxisSize: MainAxisSize.min,
@@ -1363,6 +1593,7 @@ class _WorkbenchTaskRow extends StatelessWidget {
                   ),
                 ),
               PopupMenuButton<String>(
+                key: ValueKey('task-menu-${task.id}'),
                 tooltip: '待办操作',
                 enabled: !busy,
                 icon: Icon(
@@ -1371,9 +1602,18 @@ class _WorkbenchTaskRow extends StatelessWidget {
                   color: colors.onSurfaceVariant,
                 ),
                 onSelected: (value) {
-                  if (value == 'edit') onEdit();
-                  if (value == 'delete') onDelete();
-                  if (value == 'conflict') onConflict();
+                  if (value == 'edit') {
+                    onEdit();
+                  }
+                  if (value == 'subtask') {
+                    onAddSubtask();
+                  }
+                  if (value == 'delete') {
+                    onDelete();
+                  }
+                  if (value == 'conflict') {
+                    onConflict();
+                  }
                 },
                 itemBuilder: (context) => conflict
                     ? const [
@@ -1381,6 +1621,7 @@ class _WorkbenchTaskRow extends StatelessWidget {
                       ]
                     : const [
                         PopupMenuItem(value: 'edit', child: Text('编辑')),
+                        PopupMenuItem(value: 'subtask', child: Text('添加子任务')),
                         PopupMenuItem(value: 'delete', child: Text('删除')),
                       ],
               ),

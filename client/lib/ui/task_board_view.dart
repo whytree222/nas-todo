@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../app_controller.dart';
 import '../sync_core.dart';
+import 'task_repeat_options.dart';
 
 class TaskBoardView extends StatefulWidget {
   const TaskBoardView({
@@ -30,12 +31,20 @@ class _TaskBoardViewState extends State<TaskBoardView> {
   }
 
   Future<void> _move(BuildContext context, String id, int priority) async {
-    if (!canMoveWorkbenchTask(widget.controller, id)) return;
-    final saved = await widget.controller.setTaskPlacement(id, priority: priority, requireIncomplete: true);
-    if (!context.mounted || saved) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(widget.controller.error ?? '暂时无法移动，请稍后重试')));
+    if (!canMoveWorkbenchTask(widget.controller, id)) {
+      return;
+    }
+    final saved = await widget.controller.setTaskPlacement(
+      id,
+      priority: priority,
+      requireIncomplete: true,
+    );
+    if (!context.mounted || saved) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(widget.controller.error ?? '暂时无法移动，请稍后重试')),
+    );
   }
 
   @override
@@ -58,11 +67,14 @@ class _TaskBoardViewState extends State<TaskBoardView> {
               return Scrollbar(
                 key: const ValueKey('priority-board-scrollbar'),
                 controller: _horizontal,
-                thumbVisibility: ![TargetPlatform.android, TargetPlatform.iOS]
-                    .contains(Theme.of(context).platform),
+                thumbVisibility: ![
+                  TargetPlatform.android,
+                  TargetPlatform.iOS,
+                ].contains(Theme.of(context).platform),
                 scrollbarOrientation: ScrollbarOrientation.bottom,
                 child: ScrollConfiguration(
-                  behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                  behavior: ScrollConfiguration.of(context)
+                      .copyWith(scrollbars: false),
                   child: SingleChildScrollView(
                     key: const ValueKey('priority-board-scroll'),
                     controller: _horizontal,
@@ -222,7 +234,9 @@ Widget draggableWorkbenchTask(
   Task task,
   Widget child,
 ) {
-  if (!canMoveWorkbenchTask(controller, task.id)) return child;
+  if (!canMoveWorkbenchTask(controller, task.id)) {
+    return child;
+  }
   final feedback = Material(
     color: Colors.transparent,
     child: SizedBox(
@@ -356,6 +370,22 @@ class WorkbenchTaskCard extends StatelessWidget {
                           fontSize: 11,
                           color: colors.onSurfaceVariant,
                         ),
+                      ),
+                    if (task.parentId != null)
+                      Icon(
+                        Icons.subdirectory_arrow_right_rounded,
+                        size: 13,
+                        color: colors.onSurfaceVariant,
+                      ),
+                    for (final tag in task.tags)
+                      Text(
+                        '#$tag',
+                        style: TextStyle(fontSize: 11, color: colors.primary),
+                      ),
+                    if (task.repeatRule != null)
+                      Text(
+                        taskRepeatLabel(task.repeatRule),
+                        style: TextStyle(fontSize: 11, color: colors.primary),
                       ),
                     Container(
                       padding: const EdgeInsets.symmetric(

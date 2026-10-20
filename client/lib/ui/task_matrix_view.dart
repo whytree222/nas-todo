@@ -23,7 +23,9 @@ class TaskMatrixView extends StatelessWidget {
     String id,
     MatrixQuadrant quadrant,
   ) async {
-    if (!canMoveWorkbenchTask(controller, id)) return;
+    if (!canMoveWorkbenchTask(controller, id)) {
+      return;
+    }
     // Send intent, rather than a date derived from an older drag snapshot. The
     // controller computes the needed fields after any in-flight NAS sync.
     final saved = await controller.setTaskQuadrant(
@@ -31,7 +33,9 @@ class TaskMatrixView extends StatelessWidget {
       important: quadrant.important,
       urgent: quadrant.urgent,
     );
-    if (!context.mounted || saved) return;
+    if (!context.mounted || saved) {
+      return;
+    }
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(controller.error ?? '暂时无法移动，请稍后重试')));
@@ -47,7 +51,7 @@ class TaskMatrixView extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
           child: Text(
-            '重要：较高或紧急优先级 · 紧急：今天到期或已逾期\n拖到“不紧急”会清除今天及过去的日期；未来日期保留。',
+            '重要：较高或紧急优先级 · 紧急：今天到期或已逾期\n移到“不紧急”会清除已到期日期；重复待办改到明天，未来日期保留。',
             style: TextStyle(
               fontSize: 12,
               height: 1.6,
