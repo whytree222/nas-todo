@@ -777,7 +777,7 @@ class SyncHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         if self.path == "/health":
             self.send_json(200, {"status": "ok"})
-        elif self.path == "/api/sync":
+        elif self.path in ("/api/sync", "/api/personal-sync"):
             self.send_api_error(ApiError(405, "method_not_allowed", "Use POST for synchronization"))
         else:
             self.send_api_error(ApiError(404, "not_found", "Route not found"))
@@ -792,7 +792,7 @@ class SyncHandler(BaseHTTPRequestHandler):
         sync_slot = False
         body_read_started = False
         try:
-            if self.path != "/api/sync":
+            if self.path not in ("/api/sync", "/api/personal-sync"):
                 raise ApiError(404, "not_found", "Route not found")
             length = self.authorize_and_length()
             # Bound large payload memory as well as connection/thread count.

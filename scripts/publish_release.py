@@ -110,10 +110,15 @@ def main():
               'Server upgrade code must match the tested source commit')
         server_output = dist / f'nas-todo-server-{TAG}.zip'
         with zipfile.ZipFile(server_output, 'w', zipfile.ZIP_DEFLATED) as archive:
-            for name in ('server/app.py', 'server/Dockerfile', 'docs/UPGRADE-v0.7.0.md'):
+            server_files = ['server/app.py', 'server/Dockerfile', 'docs/UPGRADE-v0.7.0.md']
+            if tuple(map(int, VERSION.split('.'))) >= (0, 10, 0):
+                server_files.append('docs/UPGRADE-v0.10.0.md')
+            for name in server_files:
                 archive.write(name, name)
         with zipfile.ZipFile(server_output) as archive:
             check(archive.testzip() is None and 'server/app.py' in archive.namelist(), 'Server upgrade package incomplete')
+            if tuple(map(int, VERSION.split('.'))) >= (0, 10, 0):
+                check('docs/UPGRADE-v0.10.0.md' in archive.namelist(), 'Personal-feature upgrade guide missing')
         assets.append(server_output)
     hashes = dist / 'SHA256SUMS.txt'
     hashes.write_text(''.join(f'{digest(p)}  {p.name}\n' for p in assets), encoding='utf-8')

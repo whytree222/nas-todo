@@ -100,6 +100,9 @@ class PersonalTest(unittest.TestCase):
         record = self.personal()['changes'][0]
         self.assertIsNone(record['data']['parent_id'])
         self.assertEqual(record['data']['tags'], ['保留'])
+        same_promotion = self.personal([self.meta(child, tags=['保留'], base=1)])['results'][0]
+        self.assertEqual(same_promotion['status'], 'applied')
+        self.assertEqual(same_promotion['record']['version'], record['version'])
         self.assertFalse(next(t for t in self.tasks()['changes'] if t['id'] == child['id'])['deleted'])
 
     def test_month_cleanup_archives_metadata_and_promotes_undated_child(self):

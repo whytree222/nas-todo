@@ -93,6 +93,21 @@ class SyncTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 SyncService(Config(self.db, token))
 
+    def test_personal_route_authentication_and_capability(self):
+        status, base = self.sync([])
+        self.assertEqual(status, 200)
+        self.assertEqual(base["personal_sync"], 1)
+        payload = {"instance_id": self.instance_id, "cursor": 0, "operations": []}
+        for token in (None, "wrong"):
+            status, response = self.request(payload, path="/api/personal-sync", token=token)
+            self.assertEqual(status, 401)
+            self.assertEqual(response["error"], "unauthorized")
+        status, response = self.request(payload, path="/api/personal-sync")
+        self.assertEqual(status, 200)
+        self.assertEqual(response["instance_id"], self.instance_id)
+        self.assertEqual(response["changes"], [])
+        self.assertEqual(self.request(method="GET", path="/api/personal-sync")[0], 405)
+
     def test_unauthorized_upload_delivers_complete_error_without_reset(self):
         # Deliberately start the body after the server has rejected the headers.
         # Closing with its upload unread can otherwise reset the connection and

@@ -133,6 +133,10 @@ void main() {
             )
             .first,
       );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(history);
+      await tester.pumpAndSettle();
+      expect(history.hitTestable(), findsOneWidget);
       await tester.tap(history);
       await tester.pumpAndSettle();
       await tester.enterText(
