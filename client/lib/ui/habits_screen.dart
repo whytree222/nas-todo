@@ -479,50 +479,43 @@ class _HabitsScreenState extends State<HabitsScreen> {
   }
 
   Future<void> _editCheckIn(Habit habit, DateTime day) async {
-    final input = TextEditingController(text: '${_value(habit, day)}');
-    try {
-      final value = await showDialog<int>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('${day.month}月${day.day}日 · ${habit.name}'),
-          content: habit.goalType == 'bool'
-              ? const Text('补记或撤销这一天的打卡。')
-              : TextField(
-                  key: const ValueKey('habit-history-value'),
-                  controller: input,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: '完成次数（目标${habit.goal}）',
-                  ),
-                ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, 0),
-              child: const Text('撤销打卡'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final value = habit.goalType == 'bool'
-                    ? 1
-                    : int.tryParse(input.text);
-                if (value != null && value >= 0 && value <= 100000) {
-                  Navigator.pop(context, value);
-                }
-              },
-              child: const Text('保存'),
-            ),
-          ],
-        ),
-      );
-      if (value != null) {
-        await _setValue(habit, day, value);
-      }
-    } finally {
-      input.dispose();
+    var input = '${_value(habit, day)}';
+    final value = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${day.month}月${day.day}日 · ${habit.name}'),
+        content: habit.goalType == 'bool'
+            ? const Text('补记或撤销这一天的打卡。')
+            : TextFormField(
+                key: const ValueKey('habit-history-value'),
+                initialValue: input,
+                onChanged: (value) => input = value,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(labelText: '完成次数（目标${habit.goal}）'),
+              ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, 0),
+            child: const Text('撤销打卡'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = habit.goalType == 'bool' ? 1 : int.tryParse(input);
+              if (value != null && value >= 0 && value <= 100000) {
+                Navigator.pop(context, value);
+              }
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (value != null) {
+      await _setValue(habit, day, value);
     }
   }
 
