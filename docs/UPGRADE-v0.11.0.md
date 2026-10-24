@@ -1,10 +1,12 @@
 # NAS 习惯成就服务升级
 
 1. 两端先同步。停止原Docker项目，备份整份原data目录；可能存在的SQLite WAL/SHM文件一并保留。
-2. 使用本聊天提供的私有v0.11.0配置，在**原项目、原目录**替换compose.yaml，保留原data、端口、用户和访问令牌，重新部署。不要新建空数据目录，无需todo-init。
+2. 解压NAS升级包，在NAS原项目打开compose.yaml，找到todo-sync下的command字段，使用command-block.yaml的完整内容替换整个旧command段。缩进保持和environment、ports等字段同级；其他字段原样保留。**命令片段不是完整compose，不能用它覆盖原文件。** 在原项目重新部署，保留原data、端口、用户和访问令牌；不要新建空数据目录，无需todo-init。
 3. 确认todo-sync持续运行，原ZeroTier地址的/health返回正常。两端安装新版并同步，成就页不再显示习惯成就升级提示即可验证。
 
-私有配置包含同步密钥，仅用于自己的NAS，不上传或转发。使用源码构建者，从Release的nas-todo-server-v0.11.0.zip更新原server/app.py和Dockerfile，并在原项目重建服务；保留.env及挂载。
+升级包不含密钥，不需要你提供或更改NAS原密钥。使用源码构建者，从Release的nas-todo-server-v0.11.0.zip更新原server/app.py和Dockerfile，并在原项目重建服务；保留.env及挂载。
+
+若使用终端，把todo-upgrade.override.yaml放入原项目目录，在该目录运行`docker compose -f compose.yaml -f todo-upgrade.override.yaml up -d --force-recreate todo-sync`，只覆盖程序命令。以后也要同时带两个-f参数，避免恢复旧程序。不能确认GUI是否合并多个配置文件时，使用上面的command替换方式。
 
 ## 新结算规则
 

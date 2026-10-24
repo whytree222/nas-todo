@@ -390,7 +390,7 @@ class _HomeScreenState extends State<HomeScreen>
         title: title,
         listName: _quickList ?? _selectedList ?? '收件箱',
         dueDate: _quickDateSet ? _quickDate : _newDueDate,
-        tags: {..._quickTags, if (_selectedTag != null) _selectedTag!}.toList(),
+        tags: {..._quickTags, ?_selectedTag}.toList(),
         priority:
             _quickPriority ??
             (_smartView == SmartTaskView.important ? 1 : _priorityFilter ?? 0),
@@ -474,7 +474,7 @@ class _HomeScreenState extends State<HomeScreen>
             _search.clear();
             _selectedTaskId = null;
           });
-          FocusScope.of(context).unfocus();
+          FocusManager.instance.primaryFocus?.unfocus();
         },
       },
       child: Focus(

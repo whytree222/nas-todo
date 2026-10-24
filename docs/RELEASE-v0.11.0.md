@@ -18,6 +18,6 @@
 
 ## 升级与安装
 
-**本版需要升级NAS结算服务。** 先让两端同步，停止原项目并备份整份data目录，在原项目替换本聊天提供的私有compose.yaml后重新部署。保留原令牌、端口和挂载，无需init容器。详见 [升级说明](https://github.com/whytree222/nas-todo/blob/main/docs/UPGRADE-v0.11.0.md)。私有配置包含密钥，不上传GitHub；Release中的NAS源码包不含密钥。
+**本版需要升级NAS结算服务。** 先让两端同步，停止原项目并备份整份data目录，从NAS升级包复制command-block.yaml的命令段，替换原项目todo-sync中的整个command字段；其余配置不动，再重新部署。保留原令牌、端口和挂载，无需init容器。命令片段不是完整compose，不能直接覆盖原配置。详见 [升级说明](https://github.com/whytree222/nas-todo/blob/main/docs/UPGRADE-v0.11.0.md)。升级包和公开源码均不含NAS密钥。
 
 Android APK仍为测试签名，不保证不同构建间覆盖安装；先同步并保留离线数据，不直接卸载旧版。Windows解压完整ZIP后运行nas_todo.exe，保留DLL和data；desktop-widget.cmd继续启动独立毛玻璃组件。

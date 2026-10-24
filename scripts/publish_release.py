@@ -117,6 +117,12 @@ def main():
                 server_files.append('docs/UPGRADE-v0.11.0.md')
             for name in server_files:
                 archive.write(name, name)
+            if tuple(map(int, VERSION.split('.'))) >= (0, 11, 0):
+                code = base64.b64encode(Path('server/app.py').read_bytes()).decode('ascii')
+                boot = "import base64, pathlib, os\npathlib.Path('/tmp/app.py').write_bytes(base64.b64decode('" + code + "'))\nos.execvp('python', ['python', '-u', '/tmp/app.py'])\n"
+                block = 'command:\n  - python\n  - -u\n  - -c\n  - |\n' + ''.join('      ' + line + '\n' for line in boot.splitlines())
+                archive.writestr('command-block.yaml', block)
+                archive.writestr('todo-upgrade.override.yaml', 'services:\n  todo-sync:\n' + ''.join('    ' + line + '\n' for line in block.splitlines()))
         with zipfile.ZipFile(server_output) as archive:
             check(archive.testzip() is None and 'server/app.py' in archive.namelist(), 'Server upgrade package incomplete')
             if tuple(map(int, VERSION.split('.'))) >= (0, 10, 0):
