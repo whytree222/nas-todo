@@ -213,7 +213,7 @@ void main() {
       final controller = await _controller();
       await tester.pumpWidget(PrivateTodoApp(controller: controller));
       await tester.pumpAndSettle();
-      expect(find.text('新建待办'), findsOneWidget);
+      expect(find.byTooltip('完整新建'), findsOneWidget);
       expect(find.byType(NavigationDestination), findsNWidgets(5));
       await tester.tap(find.text('待办已保存在本机'));
       await tester.pumpAndSettle();
@@ -337,6 +337,33 @@ void main() {
             await tester.pumpAndSettle();
             await _preview(tester, 'workbench-calendar.png', font != null);
           }
+          await tester.tap(
+            desktop
+                ? find.byTooltip('待办工作台')
+                : find.descendant(
+                    of: find.byType(NavigationBar),
+                    matching: find.text('待办'),
+                  ),
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(
+            desktop ? find.text('新建待办') : find.byTooltip('完整新建'),
+          );
+          await tester.pumpAndSettle();
+          await tester.enterText(
+            find.byKey(const ValueKey('task-title')),
+            '把今天的想法写下来',
+          );
+          await tester.pumpAndSettle();
+          await _preview(
+            tester,
+            'workbench-editor-${desktop ? 'desktop' : 'phone'}.png',
+            font != null,
+          );
+          await tester.tap(find.byTooltip('关闭编辑器'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('放弃更改'));
+          await tester.pumpAndSettle();
           expect(tester.takeException(), isNull);
         } finally {
           debugDisableShadows = previousDisableShadows;

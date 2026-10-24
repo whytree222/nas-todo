@@ -363,33 +363,32 @@ class _SettingsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border.all(
-          color: colors.outlineVariant.withValues(alpha: 0.55),
-        ),
-        borderRadius: BorderRadius.circular(22),
+    return Material(
+      color: colors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: colors.outlineVariant.withValues(alpha: .55)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 22, color: colors.primary),
-              const SizedBox(width: 12),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          ...children,
-        ],
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 22, color: colors.primary),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            ...children,
+          ],
+        ),
       ),
     );
   }

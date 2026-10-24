@@ -29,7 +29,7 @@ Future<AppController> _controller([_Store? store]) async {
   final engine = SyncEngine(
     store ?? _Store(),
     _Offline(),
-    clock: () => DateTime(2026, 10, 20),
+    clock: () => DateTime(2026, 10, 19),
   );
   await engine.load();
   final controller = AppController.forTesting(engine);
@@ -126,9 +126,21 @@ void main() {
       await tester.tap(find.byKey(ValueKey('habit-plus-$id')));
       await tester.pumpAndSettle();
       expect(controller.habitCheckIns.single.value, 1);
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('habit-history-expand')),
+        180,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('habits-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
       await tester.ensureVisible(
         find.byKey(const ValueKey('habit-history-expand')),
       );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('打卡历史'));
       await tester.pumpAndSettle();
       final history = find.byKey(ValueKey('habit-history-$id-2026-10-19'));
@@ -188,9 +200,21 @@ void main() {
         const HabitDraft(name: '阅读和记录今天看到的新知识', goalType: 'count', goal: 8),
       );
       await _habits(tester, controller, scale: 1.8);
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('habit-history-expand')),
+        180,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('habits-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
       await tester.ensureVisible(
         find.byKey(const ValueKey('habit-history-expand')),
       );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('打卡历史'));
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(

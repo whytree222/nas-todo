@@ -279,9 +279,9 @@ class _HomeScreenState extends State<HomeScreen>
     _rememberWorkspace();
   }
 
-  void _selectSmart(SmartTaskView view, {String? listName}) async {
+  Future<bool> _selectSmart(SmartTaskView view, {String? listName}) async {
     if (!await _allowLeave() || !mounted) {
-      return;
+      return false;
     }
     setState(() {
       _inlineEditing = false;
@@ -295,6 +295,7 @@ class _HomeScreenState extends State<HomeScreen>
       _selectedList = listName;
       _selectedTaskId = null;
     });
+    return true;
   }
 
   String get _today => dateKey(DateTime.now());
@@ -509,7 +510,7 @@ class _HomeScreenState extends State<HomeScreen>
                       if (wide) _rail(),
                       if (wide && _taskPage) _sidebar(),
                       Expanded(
-                        child: ColoredBox(
+                        child: Material(
                           color: colors.surface,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -952,9 +953,10 @@ class _HomeScreenState extends State<HomeScreen>
                       Icons.sell_outlined,
                       _selectedTag == tag,
                       null,
-                      () => choose(() {
-                        _selectSmart(SmartTaskView.all);
-                        setState(() => _selectedTag = tag);
+                      () => choose(() async {
+                        if (await _selectSmart(SmartTaskView.all) && mounted) {
+                          setState(() => _selectedTag = tag);
+                        }
                       }),
                     ),
                 ],

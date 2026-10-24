@@ -132,7 +132,7 @@ void main() {
     await tester.pumpWidget(PrivateTodoApp(controller: controller));
     await tester.pumpAndSettle();
 
-    expect(find.text('新建待办'), findsOneWidget);
+    expect(find.byTooltip('完整新建'), findsOneWidget);
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
