@@ -18,6 +18,26 @@ String _canonicalPersonal(Object? value) {
 }
 
 extension PersonalSyncOperations on SyncEngine {
+  List<HabitAchievementPlan> get habitAchievementPlans {
+    final plans = <String, HabitAchievementPlan>{
+      for (final p in _achievement?.habitPlans ?? <HabitAchievementPlan>[])
+        '${p.habitId}:${p.effectiveFrom}': p,
+      ..._habitPlanOverrides,
+    };
+    return plans.values.toList();
+  }
+
+  bool get habitAchievementsSupported => _achievement?.version == 2;
+  Map<String, dynamic> _wirePersonal(Map<String, dynamic> op) {
+    final wire = _map(jsonDecode(jsonEncode(op)));
+    final usePlans = op['wire_plans'] as bool? ?? habitAchievementsSupported;
+    wire.remove('wire_plans');
+    if (!usePlans) {
+      wire.remove('plan_history');
+    }
+    return wire;
+  }
+
   List<Habit> get habits =>
       _personalRecords.values
           .where((r) => r.kind == 'habit' && !r.deleted)
@@ -40,6 +60,9 @@ extension PersonalSyncOperations on SyncEngine {
   }
 
   Map<String, dynamic> _personalState() => {
+    'habit_plan_overrides': _habitPlanOverrides.values
+        .map((p) => p.toJson())
+        .toList(),
     'personal_cursor': _personalCursor,
     'personal_supported': _personalSupported,
     'personal_records': _personalRecords.values.map((r) => r.toJson()).toList(),
@@ -52,6 +75,11 @@ extension PersonalSyncOperations on SyncEngine {
   };
 
   void _restorePersonal(Map<String, dynamic> state) {
+    _habitPlanOverrides.clear();
+    for (final raw in state['habit_plan_overrides'] as List? ?? []) {
+      final plan = HabitAchievementPlan.fromJson(_map(raw));
+      _habitPlanOverrides['${plan.habitId}:${plan.effectiveFrom}'] = plan;
+    }
     _personalCursor = state['personal_cursor'] as int? ?? 0;
     if (_personalCursor < 0) {
       throw const FormatException('个人同步进度无效');
@@ -127,6 +155,18 @@ extension PersonalSyncOperations on SyncEngine {
       changeSeq: old?.changeSeq ?? 0,
       updatedAt: DateTime.now().toUtc().toIso8601String(),
     );
+    if (kind == 'habit') {
+      final day = personalClock();
+      final date =
+          '${achievementMonth(day)}-${day.day.toString().padLeft(2, '0')}';
+      _habitPlanOverrides['$id:$date'] = HabitAchievementPlan(
+        habitId: id,
+        effectiveFrom: date,
+        goal: data['goal'] as int,
+        weekdays: (data['weekdays'] as List).cast<int>(),
+        active: !deleted,
+      );
+    }
     _personalRecords[key] = record;
     _personalOps.add({
       'op_id': newId(),
@@ -135,6 +175,11 @@ extension PersonalSyncOperations on SyncEngine {
       'base_version': base,
       'action': deleted ? 'delete' : 'upsert',
       'data': data,
+      if (kind == 'habit')
+        'plan_history': _habitPlanOverrides.values
+            .where((p) => p.habitId == id)
+            .map((p) => p.toJson())
+            .toList(),
     });
   }
 
@@ -207,6 +252,7 @@ extension PersonalSyncOperations on SyncEngine {
       if (habit.version == 0 &&
           !pending.any((op) => _personalAttempted.contains(op['op_id']))) {
         _personalRecords.remove(habit.key);
+        _habitPlanOverrides.removeWhere((key, plan) => plan.habitId == id);
         _removePersonalOps('habit', id);
         for (final checkin
             in habitCheckIns.where((item) => item.habitId == id).toList()) {
@@ -219,21 +265,32 @@ extension PersonalSyncOperations on SyncEngine {
     });
   });
 
-  Future<void> setHabitValue(String habitId, String day, int value) =>
-      _serial(() async {
-        _checkLoaded();
-        final record = _personalRecords['habit/$habitId'];
-        if (record == null || record.deleted) {
-          throw StateError('习惯已删除');
-        }
-        if (record.data['goal_type'] == 'bool' && value > 1) {
-          throw ArgumentError('勾选习惯只能记录 0 或 1');
-        }
-        final id = '$habitId:$day';
-        final data = {'habit_id': habitId, 'date': day, 'value': value};
-        validatePersonalData('habit_checkin', id, data);
-        await _commit(() => _putPersonalLocal('habit_checkin', id, data));
-      });
+  Future<void> setHabitValue(String habitId, String day, int value) => _serial(
+    () async {
+      _checkLoaded();
+      final record = _personalRecords['habit/$habitId'];
+      if (record == null || record.deleted) {
+        throw StateError('习惯已删除');
+      }
+      final historicGoal =
+          habitAchievementPlans
+              .where(
+                (p) =>
+                    p.habitId == habitId && p.effectiveFrom.compareTo(day) <= 0,
+              )
+              .toList()
+            ..sort((a, b) => a.effectiveFrom.compareTo(b.effectiveFrom));
+      if (record.data['goal_type'] == 'bool' &&
+          (historicGoal.lastOrNull?.goal ?? 1) == 1 &&
+          value > 1) {
+        throw ArgumentError('勾选习惯只能记录 0 或 1');
+      }
+      final id = '$habitId:$day';
+      final data = {'habit_id': habitId, 'date': day, 'value': value};
+      validatePersonalData('habit_checkin', id, data);
+      await _commit(() => _putPersonalLocal('habit_checkin', id, data));
+    },
+  );
 
   Future<void> resolvePersonalConflict(
     String kind,
@@ -266,6 +323,9 @@ extension PersonalSyncOperations on SyncEngine {
     }
     await _commit(() {
       _personalConflicts.remove(key);
+      if (kind == 'habit' && !keepLocal) {
+        _habitPlanOverrides.removeWhere((key, p) => p.habitId == id);
+      }
       _removePersonalOps(kind, id);
       if (conflict.remote == null) {
         _personalRecords.remove(key);
@@ -293,18 +353,21 @@ extension PersonalSyncOperations on SyncEngine {
       final recordKeys = <String>{};
       for (final op in _personalOps) {
         if (recordKeys.add('${op['kind']}/${op['id']}')) {
-          batch.add(_map(jsonDecode(jsonEncode(op))));
+          batch.add(_wirePersonal(op));
         }
         if (batch.length == 100) {
           break;
         }
       }
       if (batch.isNotEmpty) {
-        await _commit(
-          () => _personalAttempted.addAll(
-            batch.map((op) => op['op_id'] as String),
-          ),
-        );
+        await _commit(() {
+          _personalAttempted.addAll(batch.map((op) => op['op_id'] as String));
+          for (final op in _personalOps.where(
+            (op) => batch.any((sent) => sent['op_id'] == op['op_id']),
+          )) {
+            op.putIfAbsent('wire_plans', () => habitAchievementsSupported);
+          }
+        });
       }
       final releases = _personalTaskReleases
           .where((id) {
@@ -341,6 +404,9 @@ extension PersonalSyncOperations on SyncEngine {
           'release_tasks': releases,
         });
       }
+      final achievement = response['achievement_v2'] == null
+          ? null
+          : AchievementState.fromJson(_map(response['achievement_v2']));
       final cursor = response['cursor'] as int;
       if (response['instance_id'] != _instanceId || cursor < requested) {
         throw StateError('NAS 个人数据身份或进度无效');
@@ -399,6 +465,9 @@ extension PersonalSyncOperations on SyncEngine {
         }
       }
       await _commit(() {
+        if (achievement != null) {
+          _achievement = achievement;
+        }
         for (final result in results) {
           final op = batch.firstWhere((op) => op['op_id'] == result['op_id']);
           final kind = op['kind'] as String, id = op['id'] as String;
@@ -485,6 +554,20 @@ extension PersonalSyncOperations on SyncEngine {
           // regular task cursor is deliberately unchanged and will replay them.
           if (!_tasks.containsKey(task.id)) {
             _tasks[task.id] = task;
+          }
+        }
+        for (final id
+            in results
+                .where((r) => r['status'] == 'applied')
+                .map((r) => batch.firstWhere((op) => op['op_id'] == r['op_id']))
+                .where((op) => op['kind'] == 'habit')
+                .map((op) => op['id'] as String)) {
+          if (achievement != null &&
+              !_personalOps.any(
+                (op) => op['kind'] == 'habit' && op['id'] == id,
+              ) &&
+              !_personalConflicts.containsKey('habit/$id')) {
+            _habitPlanOverrides.removeWhere((key, p) => p.habitId == id);
           }
         }
         _personalCursor = cursor;

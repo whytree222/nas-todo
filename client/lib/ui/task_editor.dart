@@ -15,16 +15,29 @@ Future<void> showTaskEditor(
   String? initialParentId,
   List<String> initialTags = const [],
 }) {
+  final editor = TaskEditorDialog(
+    controller: controller,
+    task: task,
+    initialListName: listName,
+    initialDueDate: initialDueDate,
+    initialParentId: initialParentId,
+    initialTags: initialTags,
+    sheet: MediaQuery.sizeOf(context).width < 700,
+  );
+  if (MediaQuery.sizeOf(context).width < 700) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      isDismissible: false,
+      enableDrag: false,
+      builder: (_) => editor,
+    );
+  }
   return showDialog<void>(
     context: context,
-    builder: (context) => TaskEditorDialog(
-      controller: controller,
-      task: task,
-      initialListName: listName,
-      initialDueDate: initialDueDate,
-      initialParentId: initialParentId,
-      initialTags: initialTags,
-    ),
+    barrierDismissible: false,
+    builder: (_) => editor,
   );
 }
 
@@ -37,8 +50,13 @@ class TaskEditorDialog extends StatefulWidget {
     this.initialDueDate,
     this.initialParentId,
     this.initialTags = const [],
+    this.inline = false,
+    this.sheet = false,
+    this.onFinished,
   });
 
+  final bool inline, sheet;
+  final VoidCallback? onFinished;
   final AppController controller;
   final Task? task;
   final String? initialListName;
@@ -47,10 +65,75 @@ class TaskEditorDialog extends StatefulWidget {
   final List<String> initialTags;
 
   @override
-  State<TaskEditorDialog> createState() => _TaskEditorDialogState();
+  State<TaskEditorDialog> createState() => TaskEditorState();
 }
 
-class _TaskEditorDialogState extends State<TaskEditorDialog> {
+class TaskEditorState extends State<TaskEditorDialog> {
+  bool _fullScreen = false;
+  bool _allowClose = false;
+  late String _initialInput;
+  String get _inputSnapshot => jsonEncode([
+    _title.text,
+    _note.text,
+    _list.text,
+    _tags.text,
+    _repeatInterval.text,
+    _repeatMonthDay.text,
+    _dueDate,
+    _priority,
+    _parentId,
+    _repeatFrequency,
+    (_repeatWeekdays.toList()..sort()),
+  ]);
+  Future<bool> confirmLeave() async {
+    if (_saving) {
+      return false;
+    }
+    if (_inputSnapshot == _initialInput) {
+      return true;
+    }
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('保留正在编辑的内容？'),
+            content: const Text('内容还没有保存到本机。继续编辑，或放弃这次更改。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('继续编辑'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('放弃更改'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<void> _requestClose() async {
+    if (await confirmLeave() && mounted) {
+      _finish();
+    }
+  }
+
+  void _finish() {
+    if (widget.inline) {
+      widget.onFinished?.call();
+      return;
+    }
+    setState(() {
+      _allowClose = true;
+      _saving = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    });
+  }
+
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _title;
   late final TextEditingController _note;
@@ -95,6 +178,7 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
           '${repeat?.monthDay ?? DateTime.tryParse(_dueDate ?? '')?.day ?? DateTime.now().day}',
     );
     _repeatWeekdays.addAll(repeat?.weekdays ?? const []);
+    _initialInput = _inputSnapshot;
   }
 
   void _refresh() {
@@ -454,7 +538,7 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
       return;
     }
     if (saved) {
-      Navigator.of(context).pop();
+      _finish();
     } else {
       setState(() {
         _saving = false;
@@ -466,234 +550,308 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return PopScope(
-      canPop: !_saving,
-      child: AlertDialog(
-        backgroundColor: colors.surface,
-        title: Row(
-          children: [
-            Icon(
-              widget.task == null
-                  ? Icons.add_task_rounded
-                  : Icons.edit_note_rounded,
-              color: colors.primary,
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Text(widget.task == null ? '新建待办' : '编辑待办')),
-          ],
+    final title = Row(
+      children: [
+        Icon(
+          widget.task == null
+              ? Icons.add_task_rounded
+              : Icons.edit_note_rounded,
+          color: colors.primary,
         ),
-        content: SizedBox(
-          width: 480,
-          child: SingleChildScrollView(
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextFormField(
-                    key: const ValueKey('task-title'),
-                    controller: _title,
-                    autofocus: true,
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            widget.task == null ? '新建待办' : '编辑待办',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+        ),
+        if (widget.sheet)
+          IconButton(
+            tooltip: _fullScreen ? '收起编辑器' : '全屏编辑',
+            onPressed: () => setState(() => _fullScreen = !_fullScreen),
+            icon: Icon(
+              _fullScreen
+                  ? Icons.fullscreen_exit_rounded
+                  : Icons.fullscreen_rounded,
+            ),
+          ),
+        IconButton(
+          tooltip: '关闭编辑器',
+          onPressed: _saving ? null : _requestClose,
+          icon: const Icon(Icons.close_rounded),
+        ),
+      ],
+    );
+    final content = SizedBox(
+      width: 480,
+      child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextFormField(
+                key: const ValueKey('task-title'),
+                controller: _title,
+                autofocus: true,
+                enabled: !_saving,
+                maxLength: 200,
+                minLines: 1,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: '待办标题',
+                  hintText: '下一件想完成的事',
+                  counterText: '',
+                ),
+                validator: (value) =>
+                    (value ?? '').trim().isEmpty ? '写一个待办标题' : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                key: const ValueKey('task-note'),
+                controller: _note,
+                enabled: !_saving,
+                minLines: 3,
+                maxLines: 6,
+                maxLength: 10000,
+                decoration: const InputDecoration(
+                  labelText: '备注',
+                  hintText: '补充细节或下一步（选填）',
+                  counterText: '',
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                key: const ValueKey('task-list'),
+                controller: _list,
+                enabled: !_saving,
+                maxLength: 60,
+                decoration: InputDecoration(
+                  labelText: '清单',
+                  hintText: '选择已有清单，或输入新名称',
+                  prefixIcon: const Icon(Icons.folder_outlined),
+                  suffixIcon: PopupMenuButton<String>(
+                    key: const ValueKey('task-list-picker'),
+                    tooltip: '选择已有清单',
                     enabled: !_saving,
-                    maxLength: 200,
-                    minLines: 1,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: '待办标题',
-                      hintText: '下一件想完成的事',
-                      counterText: '',
-                    ),
-                    validator: (value) =>
-                        (value ?? '').trim().isEmpty ? '写一个待办标题' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    key: const ValueKey('task-note'),
-                    controller: _note,
-                    enabled: !_saving,
-                    minLines: 3,
-                    maxLines: 6,
-                    maxLength: 10000,
-                    decoration: const InputDecoration(
-                      labelText: '备注',
-                      hintText: '补充细节或下一步（选填）',
-                      counterText: '',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    key: const ValueKey('task-list'),
-                    controller: _list,
-                    enabled: !_saving,
-                    maxLength: 60,
-                    decoration: InputDecoration(
-                      labelText: '清单',
-                      hintText: '选择已有清单，或输入新名称',
-                      prefixIcon: const Icon(Icons.folder_outlined),
-                      suffixIcon: PopupMenuButton<String>(
-                        key: const ValueKey('task-list-picker'),
-                        tooltip: '选择已有清单',
-                        enabled: !_saving,
-                        icon: const Icon(Icons.arrow_drop_down_rounded),
-                        constraints: const BoxConstraints(maxWidth: 320),
-                        onSelected: _selectList,
-                        itemBuilder: (context) => [
-                          for (final name in _availableLists)
-                            CheckedPopupMenuItem<String>(
-                              key: ValueKey('task-list-option-$name'),
-                              value: name,
-                              checked: name == _list.text.trim(),
-                              child: Text(
-                                name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                        ],
-                      ),
-                      counterText: '',
-                    ),
-                    validator: (value) =>
-                        (value ?? '').trim().isEmpty ? '填写清单名称' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  Text('截止日期', style: Theme.of(context).textTheme.labelLarge),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _saving ? null : _pickDate,
-                          icon: const Icon(
-                            Icons.calendar_today_outlined,
-                            size: 18,
+                    icon: const Icon(Icons.arrow_drop_down_rounded),
+                    constraints: const BoxConstraints(maxWidth: 320),
+                    onSelected: _selectList,
+                    itemBuilder: (context) => [
+                      for (final name in _availableLists)
+                        CheckedPopupMenuItem<String>(
+                          key: ValueKey('task-list-option-$name'),
+                          value: name,
+                          checked: name == _list.text.trim(),
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          label: Text(_dueDate ?? '不设日期'),
                         ),
-                      ),
-                      if (_dueDate != null) ...[
-                        const SizedBox(width: 8),
-                        IconButton(
-                          tooltip: '清除截止日期',
-                          onPressed: _saving
-                              ? null
-                              : () => setState(() => _dueDate = null),
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                      ],
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  Text('优先级', style: Theme.of(context).textTheme.labelLarge),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: SegmentedButton<int>(
-                      showSelectedIcon: false,
-                      style: ButtonStyle(
-                        minimumSize: const WidgetStatePropertyAll(Size(0, 40)),
-                        padding: const WidgetStatePropertyAll(
-                          EdgeInsets.symmetric(horizontal: 6),
-                        ),
-                        textStyle: WidgetStatePropertyAll(
-                          Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(fontSize: 12),
-                        ),
-                      ),
-                      segments: const [
-                        ButtonSegment(value: 0, label: Text('普通')),
-                        ButtonSegment(value: 1, label: Text('较高')),
-                        ButtonSegment(value: 2, label: Text('紧急')),
-                      ],
-                      selected: {_priority},
-                      onSelectionChanged: _saving
-                          ? null
-                          : (selection) =>
-                                setState(() => _priority = selection.first),
+                  counterText: '',
+                ),
+                validator: (value) =>
+                    (value ?? '').trim().isEmpty ? '填写清单名称' : null,
+              ),
+              const SizedBox(height: 16),
+              Text('截止日期', style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _saving ? null : _pickDate,
+                      icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                      label: Text(_dueDate ?? '不设日期'),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  _personalFields(),
-                  if (_error != null) ...[
-                    const SizedBox(height: 16),
-                    Text(_error!, style: TextStyle(color: colors.error)),
-                  ],
-                  if (_newerTask != null) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: colors.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            '收到的新版本',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(_newerTask!.title),
-                          if (_newerTask!.note.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              _newerTask!.note,
-                              style: TextStyle(
-                                color: colors.onSurfaceVariant,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 8),
-                          Text(
-                            '${_newerTask!.listName} · ${_newerTask!.completed ? '已完成' : '未完成'} · '
-                            '${['普通', '较高', '紧急'][_newerTask!.priority.clamp(0, 2).toInt()]}优先级 · '
-                            '${_newerTask!.dueDate ?? '无截止日期'}',
-                            style: TextStyle(
-                              color: colors.onSurfaceVariant,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
+                  if (_dueDate != null) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: '清除截止日期',
+                      onPressed: _saving
+                          ? null
+                          : () => setState(() => _dueDate = null),
+                      icon: const Icon(Icons.close_rounded),
                     ),
                   ],
                 ],
               ),
-            ),
+              const SizedBox(height: 16),
+              Text('优先级', style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<int>(
+                  showSelectedIcon: false,
+                  style: ButtonStyle(
+                    minimumSize: const WidgetStatePropertyAll(Size(0, 40)),
+                    padding: const WidgetStatePropertyAll(
+                      EdgeInsets.symmetric(horizontal: 6),
+                    ),
+                    textStyle: WidgetStatePropertyAll(
+                      Theme.of(context).textTheme.labelLarge
+                          ?.copyWith(fontSize: 12),
+                    ),
+                  ),
+                  segments: const [
+                    ButtonSegment(value: 0, label: Text('普通')),
+                    ButtonSegment(value: 1, label: Text('较高')),
+                    ButtonSegment(value: 2, label: Text('紧急')),
+                  ],
+                  selected: {_priority},
+                  onSelectionChanged: _saving
+                      ? null
+                      : (selection) =>
+                            setState(() => _priority = selection.first),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _personalFields(),
+              if (_error != null) ...[
+                const SizedBox(height: 16),
+                Text(_error!, style: TextStyle(color: colors.error)),
+              ],
+              if (_newerTask != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: colors.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '收到的新版本',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(_newerTask!.title),
+                      if (_newerTask!.note.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          _newerTask!.note,
+                          style: TextStyle(
+                            color: colors.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Text(
+                        '${_newerTask!.listName} · ${_newerTask!.completed ? '已完成' : '未完成'} · '
+                        '${['普通', '较高', '紧急'][_newerTask!.priority.clamp(0, 2).toInt()]}优先级 · '
+                        '${_newerTask!.dueDate ?? '无截止日期'}',
+                        style: TextStyle(
+                          color: colors.onSurfaceVariant,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: _saving ? null : () => Navigator.of(context).pop(),
-            child: const Text('取消'),
+      ),
+    );
+    final actions = [
+      TextButton(
+        onPressed: _saving ? null : _requestClose,
+        child: const Text('取消'),
+      ),
+      FilledButton.icon(
+        onPressed: _saving || widget.controller.syncing ? null : _save,
+        icon: _saving
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.check_rounded, size: 18),
+        label: Text(
+          _saving
+              ? '正在保存'
+              : widget.controller.syncing
+              ? '同步中，请稍候'
+              : _saveAsNew
+              ? '保存为新待办'
+              : _confirmOverwrite
+              ? '确认覆盖更新'
+              : '保存到本机',
+        ),
+      ),
+    ];
+    final panel = Material(
+      key: const ValueKey('task-editor-surface'),
+      color: colors.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+            child: title,
           ),
-          FilledButton.icon(
-            onPressed: _saving || widget.controller.syncing ? null : _save,
-            icon: _saving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.check_rounded, size: 18),
-            label: Text(
-              _saving
-                  ? '正在保存'
-                  : widget.controller.syncing
-                  ? '同步中，请稍候'
-                  : _saveAsNew
-                  ? '保存为新待办'
-                  : _confirmOverwrite
-                  ? '确认覆盖更新'
-                  : '保存到本机',
+          Divider(color: colors.outlineVariant),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
+              child: content,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: OverflowBar(
+              spacing: 8,
+              overflowSpacing: 8,
+              alignment: MainAxisAlignment.end,
+              children: actions,
             ),
           ),
         ],
       ),
+    );
+    final available =
+        MediaQuery.sizeOf(context).height -
+        MediaQuery.viewInsetsOf(context).bottom -
+        MediaQuery.paddingOf(context).top;
+    return PopScope(
+      canPop: _allowClose,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && !_saving) {
+          _requestClose();
+        }
+      },
+      child: widget.inline
+          ? panel
+          : widget.sheet
+          ? Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.viewInsetsOf(context).bottom,
+              ),
+              child: AnimatedContainer(
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 220),
+                height: available * (_fullScreen ? 1 : .9),
+                child: panel,
+              ),
+            )
+          : Dialog(
+              child: SizedBox(
+                width: 560,
+                height: available * .88,
+                child: panel,
+              ),
+            ),
     );
   }
 }

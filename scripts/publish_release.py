@@ -113,6 +113,8 @@ def main():
             server_files = ['server/app.py', 'server/Dockerfile', 'docs/UPGRADE-v0.7.0.md']
             if tuple(map(int, VERSION.split('.'))) >= (0, 10, 0):
                 server_files.append('docs/UPGRADE-v0.10.0.md')
+            if tuple(map(int, VERSION.split('.'))) >= (0, 11, 0):
+                server_files.append('docs/UPGRADE-v0.11.0.md')
             for name in server_files:
                 archive.write(name, name)
         with zipfile.ZipFile(server_output) as archive:

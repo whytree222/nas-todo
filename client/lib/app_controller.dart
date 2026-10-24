@@ -13,6 +13,8 @@ import 'storage_io.dart';
 import 'sync_core.dart';
 import 'task_dates.dart';
 import 'personal_core.dart';
+import 'workspace_preferences.dart';
+import 'habit_achievement.dart';
 
 /// Keeps local edits available even when the NAS cannot be reached.
 class AppController extends ChangeNotifier {
@@ -58,6 +60,42 @@ class AppController extends ChangeNotifier {
   AppearancePreferences _appearance = const AppearancePreferences();
   bool _savingAppearance = false;
   String? _appearanceError;
+  Future<void> _preferencesTail = Future<void>.value();
+  String? workspaceError;
+  WorkspacePreferences get workspace => _appearance.workspace;
+  Future<void> _queuePreferences(Future<void> Function() action) {
+    final result = _preferencesTail.then((_) => action());
+    _preferencesTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
+
+  Future<bool> setWorkspace(Map<String, dynamic> changes) async {
+    if (_disposed) {
+      return false;
+    }
+    try {
+      await _queuePreferences(() async {
+        final next = AppearancePreferences(
+          appTheme: _appearance.appTheme,
+          widgetTheme: _appearance.widgetTheme,
+          workspace: workspace.withChanges(changes),
+        );
+        await _appearanceStore.write(next.toJson());
+        _appearance = next;
+        workspaceError = null;
+      });
+      _notify();
+      return true;
+    } catch (_) {
+      workspaceError = '显示偏好未能保存，请重试。';
+      _notify();
+      return false;
+    }
+  }
+
   Timer? _periodicTimer;
   Timer? _editTimer;
   bool _disposed = false;
@@ -103,6 +141,9 @@ class AppController extends ChangeNotifier {
   bool get personalUpgradeRequired => engine.personalUpgradeRequired;
   AchievementState? get achievement => engine.achievement;
   bool get achievementsSupported => engine.achievementsSupported;
+  bool get habitAchievementsSupported => engine.habitAchievementsSupported;
+  List<HabitAchievementPlan> get habitAchievementPlans =>
+      engine.habitAchievementPlans;
   List<SyncConflict> get conflicts => engine.conflicts;
   int get pendingCount => engine.pendingCount;
   DateTime? get lastSyncedAt => engine.lastSyncedAt;
@@ -183,13 +224,16 @@ class AppController extends ChangeNotifier {
     _savingAppearance = true;
     _notify();
     try {
-      final next = AppearancePreferences(
-        appTheme: appTheme,
-        widgetTheme: widgetTheme,
-      );
-      await _appearanceStore.write(next.toJson());
-      _appearance = next;
-      _appearanceError = null;
+      await _queuePreferences(() async {
+        final next = AppearancePreferences(
+          appTheme: appTheme,
+          widgetTheme: widgetTheme,
+          workspace: workspace,
+        );
+        await _appearanceStore.write(next.toJson());
+        _appearance = next;
+        _appearanceError = null;
+      });
       return true;
     } catch (error) {
       _appearanceError = '主题颜色未能保存：${_messageFor(error)}';

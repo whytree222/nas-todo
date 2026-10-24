@@ -50,6 +50,7 @@ void _size(WidgetTester tester, Size size) {
 }
 
 Future<void> _seed(AppController controller) async {
+  await controller.setWorkspace({'matrix_enabled': true});
   final now = DateTime.now();
   await controller.saveTask(
     TaskDraft(
@@ -164,7 +165,7 @@ void main() {
             .text,
         isEmpty,
       );
-      await tester.tap(find.text('今天').last);
+      await _drawer(tester, '今天');
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('workbench-quick-add')),

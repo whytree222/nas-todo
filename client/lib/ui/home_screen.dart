@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -50,19 +52,41 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  void _newTask() => showTaskEditor(
-    context,
-    widget.controller,
-    listName: _selectedList,
-    initialDueDate: _newDueDate,
-    initialTags: _selectedTag == null ? const [] : [_selectedTag!],
-  );
+  Future<bool> _allowLeave() async =>
+      !_inlineEditing ||
+      await (_inlineEditorKey.currentState?.confirmLeave() ??
+          Future.value(true));
+  void _newTask() async {
+    if (!await _allowLeave() || !mounted) {
+      return;
+    }
+    if (MediaQuery.sizeOf(context).width >= 1220 && _taskPage) {
+      setState(() {
+        _inlineEditorKey = GlobalKey<TaskEditorState>();
+        _creatingTask = true;
+        _inlineEditing = true;
+        _selectedTaskId = null;
+        _detailVisible = true;
+      });
+    } else {
+      await showTaskEditor(
+        context,
+        widget.controller,
+        listName: _selectedList,
+        initialDueDate: _newDueDate,
+        initialTags: _selectedTag == null ? const [] : [_selectedTag!],
+      );
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.controller.addListener(_scheduleCelebration);
+    _restoreWorkspace();
+    _taskScroll.addListener(_rememberWorkspace);
+    _quickFocus.addListener(_refreshQuickFocus);
     _scheduleCelebration();
   }
 
@@ -150,8 +174,12 @@ class _HomeScreenState extends State<HomeScreen>
     WidgetsBinding.instance.removeObserver(this);
     widget.controller.removeListener(_scheduleCelebration);
     dailyCelebrationRouteObserver.unsubscribe(this);
+    _preferenceTimer?.cancel();
+    unawaited(widget.controller.setWorkspace(_workspaceSnapshot()));
+    _taskScroll.dispose();
     _search.dispose();
     _quickTitle.dispose();
+    _quickFocus.removeListener(_refreshQuickFocus);
     _quickFocus.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -178,10 +206,66 @@ class _HomeScreenState extends State<HomeScreen>
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _quickSaving = false;
 
+  void _refreshQuickFocus() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  late ScrollController _taskScroll;
+  Timer? _preferenceTimer;
+  bool _inlineEditing = false;
+  bool _creatingTask = false;
+  GlobalKey<TaskEditorState> _inlineEditorKey = GlobalKey<TaskEditorState>();
+  void _restoreWorkspace() {
+    final saved = widget.controller.workspace;
+    _page = saved.page;
+    _smartView =
+        SmartTaskView.values
+            .where((v) => v.name == saved.smartView)
+            .firstOrNull ??
+        SmartTaskView.all;
+    _selectedList = saved.listName;
+    _selectedTag = saved.tag;
+    _presentation = saved.presentation;
+    _detailVisible = saved.detailVisible;
+    _selectedTaskId = saved.selectedTaskId;
+    _sort = saved.sort;
+    _priorityFilter = saved.priority;
+    _taskScroll = ScrollController(initialScrollOffset: saved.scrollOffset);
+  }
+
+  Map<String, dynamic> _workspaceSnapshot() => {
+    'page': _page,
+    'smart_view': _smartView.name,
+    'list_name': _selectedList,
+    'tag': _selectedTag,
+    'presentation': _presentation,
+    'detail_visible': _detailVisible,
+    'selected_task_id': _selectedTaskId,
+    'sort': _sort,
+    'priority': _priorityFilter,
+    'scroll_offset': _taskScroll.hasClients
+        ? _taskScroll.offset
+        : widget.controller.workspace.scrollOffset,
+  };
+  void _rememberWorkspace() {
+    _preferenceTimer?.cancel();
+    _preferenceTimer = Timer(const Duration(milliseconds: 450), () {
+      if (mounted) {
+        unawaited(widget.controller.setWorkspace(_workspaceSnapshot()));
+      }
+    });
+  }
+
   bool get _taskPage => _page <= 2;
 
-  void _selectPage(int index) {
+  void _selectPage(int index) async {
+    if (!await _allowLeave() || !mounted) {
+      return;
+    }
     setState(() {
+      _inlineEditing = false;
       _page = index;
       _selectedTag = null;
       _selectedList = null;
@@ -192,10 +276,15 @@ class _HomeScreenState extends State<HomeScreen>
           ? SmartTaskView.completed
           : SmartTaskView.all;
     });
+    _rememberWorkspace();
   }
 
-  void _selectSmart(SmartTaskView view, {String? listName}) {
+  void _selectSmart(SmartTaskView view, {String? listName}) async {
+    if (!await _allowLeave() || !mounted) {
+      return;
+    }
     setState(() {
+      _inlineEditing = false;
       _page = view == SmartTaskView.today
           ? 1
           : view == SmartTaskView.completed
@@ -209,6 +298,14 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   String get _today => dateKey(DateTime.now());
+
+  @override
+  void setState(VoidCallback fn) {
+    super.setState(fn);
+    if (mounted) {
+      _rememberWorkspace();
+    }
+  }
 
   List<Task> _visibleTasks() => queryWorkbenchTasks(
     widget.controller.tasks,
@@ -261,12 +358,25 @@ class _HomeScreenState extends State<HomeScreen>
       ? _today
       : null;
 
-  void _editTask(Task task) {
+  void _editTask(Task task) async {
+    if (!await _allowLeave() || !mounted) {
+      return;
+    }
     if (widget.controller.conflicts.any((item) => item.taskId == task.id)) {
       showConflictDialog(context, widget.controller);
       return;
     }
-    showTaskEditor(context, widget.controller, task: task);
+    if (MediaQuery.sizeOf(context).width >= 1220 && _taskPage) {
+      setState(() {
+        _inlineEditorKey = GlobalKey<TaskEditorState>();
+        _creatingTask = false;
+        _selectedTaskId = task.id;
+        _detailVisible = true;
+        _inlineEditing = true;
+      });
+    } else {
+      showTaskEditor(context, widget.controller, task: task);
+    }
   }
 
   Future<void> _quickAdd() async {
@@ -278,12 +388,12 @@ class _HomeScreenState extends State<HomeScreen>
     final saved = await widget.controller.saveTask(
       TaskDraft(
         title: title,
-        listName: _selectedList ?? '收件箱',
-        dueDate: _newDueDate,
-        tags: _selectedTag == null ? const [] : [_selectedTag!],
-        priority: _smartView == SmartTaskView.important
-            ? 1
-            : _priorityFilter ?? 0,
+        listName: _quickList ?? _selectedList ?? '收件箱',
+        dueDate: _quickDateSet ? _quickDate : _newDueDate,
+        tags: {..._quickTags, if (_selectedTag != null) _selectedTag!}.toList(),
+        priority:
+            _quickPriority ??
+            (_smartView == SmartTaskView.important ? 1 : _priorityFilter ?? 0),
       ),
     );
     if (!mounted) {
@@ -355,8 +465,12 @@ class _HomeScreenState extends State<HomeScreen>
             });
           }
         },
-        const SingleActivator(LogicalKeyboardKey.escape): () {
+        const SingleActivator(LogicalKeyboardKey.escape): () async {
+          if (!await _allowLeave() || !mounted) {
+            return;
+          }
           setState(() {
+            _inlineEditing = false;
             _search.clear();
             _selectedTaskId = null;
           });
@@ -392,7 +506,8 @@ class _HomeScreenState extends State<HomeScreen>
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (wide) ...[_rail(), _sidebar()],
+                      if (wide) _rail(),
+                      if (wide && _taskPage) _sidebar(),
                       Expanded(
                         child: ColoredBox(
                           color: colors.surface,
@@ -453,7 +568,7 @@ class _HomeScreenState extends State<HomeScreen>
                                 )
                               else ...[
                                 _taskToolbar(tasks.length),
-                                _quickEntry(),
+                                if (wide) _quickEntry(),
                                 Expanded(
                                   child: _presentation == 'board'
                                       ? TaskBoardView(
@@ -461,7 +576,11 @@ class _HomeScreenState extends State<HomeScreen>
                                           tasks: tasks,
                                           onEdit: _editTask,
                                         )
-                                      : _presentation == 'matrix'
+                                      : _presentation == 'matrix' &&
+                                            widget
+                                                .controller
+                                                .workspace
+                                                .matrixEnabled
                                       ? TaskMatrixView(
                                           controller: widget.controller,
                                           tasks: tasks,
@@ -470,6 +589,7 @@ class _HomeScreenState extends State<HomeScreen>
                                       : tasks.isEmpty
                                       ? _emptyState()
                                       : ListView.separated(
+                                          controller: _taskScroll,
                                           key: const ValueKey(
                                             'workbench-task-list',
                                           ),
@@ -536,10 +656,18 @@ class _HomeScreenState extends State<HomeScreen>
                                               onEdit: () => _editTask(task),
                                               onDelete: () => _deleteTask(task),
                                               onSelect: canShowDetails
-                                                  ? () => setState(() {
-                                                      _selectedTaskId = task.id;
-                                                      _detailVisible = true;
-                                                    })
+                                                  ? () async {
+                                                      if (!await _allowLeave() ||
+                                                          !mounted) {
+                                                        return;
+                                                      }
+                                                      setState(() {
+                                                        _inlineEditing = false;
+                                                        _selectedTaskId =
+                                                            task.id;
+                                                        _detailVisible = true;
+                                                      });
+                                                    }
                                                   : null,
                                               onConflict: () =>
                                                   showConflictDialog(
@@ -550,12 +678,32 @@ class _HomeScreenState extends State<HomeScreen>
                                           },
                                         ),
                                 ),
+                                if (!wide) _quickEntry(),
                               ],
                             ],
                           ),
                         ),
                       ),
-                      if (details)
+                      if (details &&
+                          _inlineEditing &&
+                          (selected != null || _creatingTask))
+                        SizedBox(
+                          width: 390,
+                          child: TaskEditorDialog(
+                            key: _inlineEditorKey,
+                            controller: widget.controller,
+                            task: _creatingTask ? null : selected,
+                            inline: true,
+                            initialListName: _selectedList,
+                            initialDueDate: _newDueDate,
+                            initialTags: _selectedTag == null
+                                ? const []
+                                : [_selectedTag!],
+                            onFinished: () =>
+                                setState(() => _inlineEditing = false),
+                          ),
+                        )
+                      else if (details)
                         TaskDetailPane(
                           controller: widget.controller,
                           task: selected,
@@ -577,35 +725,32 @@ class _HomeScreenState extends State<HomeScreen>
                     ],
                   ),
                 ),
-                floatingActionButton: !wide && _taskPage
-                    ? FloatingActionButton.extended(
-                        onPressed: widget.controller.editing ? null : _newTask,
-                        icon: const Icon(Icons.add_rounded),
-                        label: const Text('新建待办'),
-                      )
-                    : null,
+                floatingActionButton: null,
                 bottomNavigationBar: wide
                     ? null
                     : NavigationBar(
                         height: 68,
-                        selectedIndex: _page >= 5 ? 0 : _page,
-                        onDestinationSelected: _selectPage,
+                        selectedIndex: _taskPage
+                            ? 0
+                            : const {3: 1, 6: 2, 5: 3, 4: 4}[_page] ?? 0,
+                        onDestinationSelected: (index) =>
+                            _selectPage(const [0, 3, 6, 5, 4][index]),
                         destinations: const [
                           NavigationDestination(
                             icon: Icon(Icons.checklist_rounded),
                             label: '待办',
                           ),
                           NavigationDestination(
-                            icon: Icon(Icons.wb_sunny_outlined),
-                            label: '今天',
-                          ),
-                          NavigationDestination(
-                            icon: Icon(Icons.task_alt_rounded),
-                            label: '已完成',
-                          ),
-                          NavigationDestination(
                             icon: Icon(Icons.calendar_month_outlined),
                             label: '日历',
+                          ),
+                          NavigationDestination(
+                            icon: Icon(Icons.local_florist_outlined),
+                            label: '习惯',
+                          ),
+                          NavigationDestination(
+                            icon: Icon(Icons.workspace_premium_outlined),
+                            label: '成就',
                           ),
                           NavigationDestination(
                             icon: Icon(Icons.settings_outlined),
@@ -697,10 +842,10 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _sidebar({bool drawer = false}) {
     final colors = Theme.of(context).colorScheme;
     void choose(VoidCallback action) {
-      action();
       if (drawer) {
-        Navigator.of(context).pop();
+        _scaffoldKey.currentState?.closeDrawer();
       }
+      action();
     }
 
     int count(SmartTaskView view, {String? name}) => queryWorkbenchTasks(
@@ -1164,17 +1309,25 @@ class _HomeScreenState extends State<HomeScreen>
                           : const Icon(Icons.view_kanban_outlined, size: 15),
                       label: const Text('看板'),
                     ),
-                    ButtonSegment(
-                      value: 'matrix',
-                      icon: MediaQuery.textScalerOf(context).scale(11) > 15
-                          ? null
-                          : const Icon(Icons.grid_view_rounded, size: 15),
-                      label: const Text('四象限'),
-                    ),
+                    if (widget.controller.workspace.matrixEnabled)
+                      ButtonSegment(
+                        value: 'matrix',
+                        icon: MediaQuery.textScalerOf(context).scale(11) > 15
+                            ? null
+                            : const Icon(Icons.grid_view_rounded, size: 15),
+                        label: const Text('四象限'),
+                      ),
                   ],
-                  selected: {_presentation},
-                  onSelectionChanged: (value) =>
-                      setState(() => _presentation = value.first),
+                  selected: {
+                    _presentation == 'matrix' &&
+                            !widget.controller.workspace.matrixEnabled
+                        ? 'list'
+                        : _presentation,
+                  },
+                  onSelectionChanged: (value) => setState(() {
+                    _presentation = value.first;
+                    _rememberWorkspace();
+                  }),
                 ),
               ),
               const SizedBox(width: 6),
@@ -1275,57 +1428,193 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  String? _quickList, _quickDate;
+  bool _quickDateSet = false;
+  int? _quickPriority;
+  final Set<String> _quickTags = {};
+  Future<void> _quickChooseDate(String action) async {
+    DateTime? chosen;
+    if (action == 'pick') {
+      chosen = await showDatePicker(
+        context: context,
+        initialDate:
+            DateTime.tryParse(_quickDate ?? _newDueDate ?? '') ??
+            DateTime.now(),
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2100, 12, 31),
+      );
+    }
+    if (!mounted || (action == 'pick' && chosen == null)) {
+      return;
+    }
+    setState(() {
+      _quickDateSet = true;
+      _quickDate = action == 'none'
+          ? null
+          : action == 'today'
+          ? _today
+          : dateKey(chosen!);
+    });
+  }
+
   Widget _quickEntry() {
     final colors = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
-      child: TextField(
-        key: const ValueKey('workbench-quick-add'),
-        controller: _quickTitle,
-        focusNode: _quickFocus,
-        enabled: !_quickSaving,
-        maxLength: 200,
-        onSubmitted: (_) => _quickAdd(),
-        textInputAction: TextInputAction.done,
-        decoration: InputDecoration(
-          hintText: _smartView == SmartTaskView.today
-              ? '添加今天的待办，按回车保存'
-              : '添加待办，按回车保存',
-          hintStyle: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
-          counterText: '',
-          prefixIcon: Icon(Icons.add_rounded, size: 20, color: colors.primary),
-          suffixIcon: IconButton(
-            tooltip: '快速添加',
-            onPressed: widget.controller.editing || _quickSaving
-                ? null
-                : _quickAdd,
-            icon: _quickSaving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Icon(
-                    Icons.subdirectory_arrow_left_rounded,
-                    color: colors.onSurfaceVariant,
-                    size: 18,
+    final tags = (widget.controller.tasks.expand((t) => t.tags).toSet().toList()
+      ..sort());
+    return Container(
+      key: const ValueKey('quick-entry-panel'),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(top: BorderSide(color: colors.outlineVariant)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const ValueKey('workbench-quick-add'),
+                  controller: _quickTitle,
+                  focusNode: _quickFocus,
+                  enabled: !_quickSaving,
+                  onChanged: (_) => setState(() {}),
+                  maxLength: 200,
+                  onSubmitted: (_) => _quickAdd(),
+                  textInputAction: TextInputAction.done,
+                  decoration: InputDecoration(
+                    hintText: '添加待办，按回车保存',
+                    counterText: '',
+                    prefixIcon: Icon(Icons.add_rounded, color: colors.primary),
+                    isDense: true,
+                    suffixIcon: IconButton(
+                      tooltip: '快速添加',
+                      onPressed: widget.controller.editing || _quickSaving
+                          ? null
+                          : _quickAdd,
+                      icon: _quickSaving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.arrow_upward_rounded),
+                    ),
+                    fillColor: colors.surfaceContainerLow,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
                   ),
+                ),
+              ),
+              IconButton(
+                tooltip: '完整新建',
+                onPressed: widget.controller.editing ? null : _newTask,
+                icon: const Icon(Icons.open_in_full_rounded),
+              ),
+            ],
           ),
-          isDense: true,
-          filled: true,
-          fillColor: colors.surfaceContainerLow,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 12,
-          ),
-        ),
+          if (_quickFocus.hasFocus || _quickTitle.text.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    PopupMenuButton<String>(
+                      tooltip: '快速选择清单',
+                      onSelected: (v) => setState(() => _quickList = v),
+                      itemBuilder: (_) => [
+                        for (final name in _lists)
+                          PopupMenuItem(value: name, child: Text(name)),
+                      ],
+                      child: _quickChip(
+                        Icons.folder_outlined,
+                        _quickList ?? _selectedList ?? '收件箱',
+                      ),
+                    ),
+                    PopupMenuButton<String>(
+                      tooltip: '快速选择日期',
+                      onSelected: _quickChooseDate,
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'none', child: Text('无日期')),
+                        PopupMenuItem(value: 'today', child: Text('今天')),
+                        PopupMenuItem(value: 'pick', child: Text('选择日期')),
+                      ],
+                      child: _quickChip(
+                        Icons.calendar_today_outlined,
+                        (_quickDateSet ? _quickDate : _newDueDate) ?? '日期',
+                      ),
+                    ),
+                    PopupMenuButton<int>(
+                      tooltip: '快速选择优先级',
+                      onSelected: (v) => setState(() => _quickPriority = v),
+                      itemBuilder: (_) => [
+                        for (var i = 0; i < 3; i++)
+                          PopupMenuItem(
+                            value: i,
+                            child: Text(['普通', '较高', '紧急'][i]),
+                          ),
+                      ],
+                      child: _quickChip(
+                        Icons.flag_outlined,
+                        ['普通', '较高', '紧急'][_quickPriority ??
+                            _priorityFilter ??
+                            0],
+                      ),
+                    ),
+                    if (tags.isNotEmpty)
+                      PopupMenuButton<String>(
+                        tooltip: '快速选择标签',
+                        onSelected: (v) => setState(() {
+                          if (!_quickTags.add(v)) {
+                            _quickTags.remove(v);
+                          }
+                        }),
+                        itemBuilder: (_) => [
+                          for (final tag in tags)
+                            CheckedPopupMenuItem(
+                              value: tag,
+                              checked: _quickTags.contains(tag),
+                              child: Text('#$tag'),
+                            ),
+                        ],
+                        child: _quickChip(
+                          Icons.sell_outlined,
+                          _quickTags.isEmpty
+                              ? '标签'
+                              : _quickTags.map((t) => '#$t').join(' '),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
 
+  Widget _quickChip(IconData icon, String text) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 15),
+        const SizedBox(width: 5),
+        Text(text, style: const TextStyle(fontSize: 12)),
+      ],
+    ),
+  );
+
   Widget _emptyState() {
     final colors = Theme.of(context).colorScheme;
-    final searching = _search.text.trim().isNotEmpty;
+    final searching =
+        _search.text.trim().isNotEmpty ||
+        _priorityFilter != null ||
+        _selectedTag != null;
     final title = searching
         ? '没有找到匹配的待办'
         : _page == 2
@@ -1427,7 +1716,7 @@ class _WorkbenchTaskRow extends StatelessWidget {
         task.dueDate!.compareTo(today) < 0;
     return Material(
       color: selected
-          ? colors.primaryContainer.withValues(alpha: 0.4)
+          ? colors.primaryContainer.withValues(alpha: 0.22)
           : colors.surface,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
@@ -1436,9 +1725,9 @@ class _WorkbenchTaskRow extends StatelessWidget {
             ? null
             : conflict
             ? onConflict
-            : onEdit,
+            : onSelect ?? onEdit,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 9),
+          padding: const EdgeInsets.symmetric(vertical: 6),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1460,8 +1749,8 @@ class _WorkbenchTaskRow extends StatelessWidget {
                   ),
                 ),
               SizedBox(
-                width: 40,
-                height: 40,
+                width: 48,
+                height: 48,
                 child: Checkbox(
                   value: task.completed,
                   activeColor: colors.primary,
@@ -1479,7 +1768,7 @@ class _WorkbenchTaskRow extends StatelessWidget {
                       Text(
                         task.title,
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 16,
                           height: 1.5,
                           color: task.completed
                               ? colors.onSurfaceVariant
@@ -1497,7 +1786,7 @@ class _WorkbenchTaskRow extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 11,
+                              fontSize: 13,
                               color: colors.onSurfaceVariant,
                             ),
                           ),
@@ -1512,7 +1801,7 @@ class _WorkbenchTaskRow extends StatelessWidget {
                             Text(
                               task.dueDate == today ? '今天' : task.dueDate!,
                               style: TextStyle(
-                                fontSize: 10,
+                                fontSize: 12,
                                 color: overdue
                                     ? colors.error
                                     : task.dueDate == today
@@ -1523,7 +1812,7 @@ class _WorkbenchTaskRow extends StatelessWidget {
                           Text(
                             task.listName,
                             style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 12,
                               color: colors.onSurfaceVariant,
                             ),
                           ),
@@ -1536,7 +1825,7 @@ class _WorkbenchTaskRow extends StatelessWidget {
                             Text(
                               '#$tag',
                               style: TextStyle(
-                                fontSize: 10,
+                                fontSize: 12,
                                 color: colors.primary,
                               ),
                             ),
@@ -1544,7 +1833,7 @@ class _WorkbenchTaskRow extends StatelessWidget {
                             Text(
                               taskRepeatLabel(task.repeatRule),
                               style: TextStyle(
-                                fontSize: 10,
+                                fontSize: 12,
                                 color: colors.primary,
                               ),
                             ),
@@ -1561,7 +1850,7 @@ class _WorkbenchTaskRow extends StatelessWidget {
                                 Text(
                                   task.priority == 2 ? '紧急' : '较高',
                                   style: TextStyle(
-                                    fontSize: 10,
+                                    fontSize: 12,
                                     color: priority,
                                   ),
                                 ),
@@ -1571,7 +1860,7 @@ class _WorkbenchTaskRow extends StatelessWidget {
                             Text(
                               '需要选择版本',
                               style: TextStyle(
-                                fontSize: 10,
+                                fontSize: 12,
                                 color: colors.error,
                               ),
                             ),

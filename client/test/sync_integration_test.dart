@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nas_todo/storage_io.dart';
 import 'package:nas_todo/sync_core.dart';
 import 'package:nas_todo/personal_core.dart';
+import 'package:nas_todo/achievement_core.dart';
 
 const testToken = 'integration-test-only-not-a-deployment-secret-123456';
 
@@ -843,5 +844,40 @@ void main() {
     expect(b.habits, hasLength(1));
     expect(b.habitCheckIns, hasLength(1));
     expect(b.habitCheckIns.single.value, 1);
+  });
+  test('NAS habit achievements require each category independently and converge across devices', () async {
+    final a = await device('habit-score-a'), b = await device('habit-score-b');
+    final now = achievementToday();
+    final day =
+        '${achievementMonth(now)}-${now.day.toString().padLeft(2, '0')}';
+    for (var i = 0; i < 20; i++) {
+      await a.saveTask(TaskDraft(title: '完成$i', dueDate: day, completed: true));
+    }
+    await a.saveHabit(
+      const HabitDraft(name: '喝水达标', goalType: 'count', goal: 8),
+    );
+    final id = a.habits.single.id;
+    await a.setHabitValue(id, day, 7);
+    await a.sync();
+    expect(a.achievement!.version, 2);
+    var week = a.achievement!.live.weeks.firstWhere(
+      (w) => w.start.compareTo(day) <= 0 && w.end.compareTo(day) >= 0,
+    );
+    expect(week.completedTasks, 20);
+    expect(week.habitTotal, 1);
+    expect(week.habitCompleted, 0);
+    expect(week.star, isFalse);
+    await a.setHabitValue(id, day, 8);
+    await a.sync();
+    await b.sync();
+    week = b.achievement!.live.weeks.firstWhere(
+      (w) => w.start.compareTo(day) <= 0 && w.end.compareTo(day) >= 0,
+    );
+    expect(week.habitCompleted, 1);
+    expect(week.star, isTrue);
+    expect(b.habitAchievementPlans, isNotEmpty);
+    final reopened = await device('habit-score-a');
+    expect(reopened.achievement!.version, 2);
+    expect(reopened.habitAchievementPlans, isNotEmpty);
   });
 }

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'achievement_core.dart';
+import 'habit_achievement.dart';
 import 'personal_core.dart';
 export 'personal_core.dart' show TaskRepeatRule;
 part 'personal_sync.dart';
@@ -297,6 +298,7 @@ class SyncEngine {
   final List<Map<String, dynamic>> _operations = [];
   final Set<String> _attemptedIds = {};
   final Map<String, SyncConflict> _conflicts = {};
+  final Map<String, HabitAchievementPlan> _habitPlanOverrides = {};
   final Map<String, PersonalRecord> _personalRecords = {};
   final List<Map<String, dynamic>> _personalOps = [];
   final Set<String> _personalAttempted = {};
@@ -312,7 +314,9 @@ class SyncEngine {
   AchievementState? _achievement;
   bool _achievementsSupported = false;
 
-  SyncEngine(this.store, this.transport);
+  final DateTime Function() personalClock;
+  SyncEngine(this.store, this.transport, {DateTime Function()? clock})
+    : personalClock = clock ?? achievementToday;
   List<Task> get tasks => List.unmodifiable(
     _tasks.values.where((t) => !t.deleted).map(_decorateTask),
   );
@@ -703,9 +707,11 @@ class SyncEngine {
           .map((raw) => Task.fromJson(_map(raw)))
           .toList();
       final results = (response['results'] as List).map(_map).toList();
-      final achievement = response['achievement'] == null
+      final rawAchievement =
+          response['achievement_v2'] ?? response['achievement'];
+      final achievement = rawAchievement == null
           ? null
-          : AchievementState.fromJson(_map(response['achievement']));
+          : AchievementState.fromJson(_map(rawAchievement));
       final sentIds = batch.map((op) => op['op_id'] as String).toSet();
       final seen = <String>{};
       for (final result in results) {

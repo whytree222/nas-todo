@@ -75,6 +75,27 @@ ThemeData buildTodoTheme(TodoThemeColor themeColor) {
       elevation: 0,
       scrolledUnderElevation: 0,
     ),
+    textTheme: const TextTheme(
+      bodyLarge: TextStyle(fontSize: 16),
+      bodyMedium: TextStyle(fontSize: 14),
+      bodySmall: TextStyle(fontSize: 13),
+      labelLarge: TextStyle(fontSize: 13),
+    ),
+    cardTheme: CardThemeData(
+      elevation: 0,
+      color: colors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: colors.outlineVariant.withValues(alpha: .65)),
+      ),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: colors.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+    ),
     dialogTheme: DialogThemeData(backgroundColor: colors.surface),
     dividerTheme: DividerThemeData(
       color: colors.outlineVariant,

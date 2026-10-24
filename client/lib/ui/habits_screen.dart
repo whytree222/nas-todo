@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../app_controller.dart';
 import '../personal_core.dart';
+import '../habit_achievement.dart';
 import '../task_dates.dart';
 
 class HabitsScreen extends StatefulWidget {
@@ -38,8 +39,30 @@ class _HabitsScreenState extends State<HabitsScreen> {
           ?.value ??
       0;
 
-  bool _scheduled(Habit habit, DateTime day) =>
-      habit.weekdays.contains(day.weekday);
+  List<HabitAchievementPlan> _plans(Habit habit, DateTime day) =>
+      (widget.controller.habitAchievementPlans
+          .where(
+            (p) =>
+                p.habitId == habit.id &&
+                p.effectiveFrom.compareTo(dateKey(day)) <= 0,
+          )
+          .toList()
+        ..sort((a, b) => a.effectiveFrom.compareTo(b.effectiveFrom)));
+  int _goal(Habit habit, DateTime day) =>
+      _plans(habit, day).lastOrNull?.goal ?? habit.goal;
+  bool _scheduled(Habit habit, DateTime day) {
+    final plans = _plans(habit, day);
+    if (plans.isNotEmpty) {
+      return plans.last.active == true &&
+          plans.last.weekdays.contains(day.weekday);
+    }
+    if (widget.controller.habitAchievementPlans.any(
+      (p) => p.habitId == habit.id,
+    )) {
+      return false;
+    }
+    return habit.weekdays.contains(day.weekday);
+  }
 
   Future<void> _setValue(Habit habit, DateTime day, int value) async {
     final saved = await widget.controller.setHabitValue(
@@ -97,7 +120,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
           ),
           const SizedBox(height: 16),
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: colors.primaryContainer,
               borderRadius: BorderRadius.circular(24),
@@ -157,24 +180,33 @@ class _HabitsScreenState extends State<HabitsScreen> {
           for (final habit in habits) _habitCard(habit),
           if (historyHabit != null) ...[
             const SizedBox(height: 18),
-            Text('打卡历史', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              key: ValueKey('habit-history-select-${historyHabit.id}'),
-              initialValue: historyHabit.id,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: '查看习惯'),
-              items: [
-                for (final habit in habits)
-                  DropdownMenuItem(
-                    value: habit.id,
-                    child: Text(habit.name, overflow: TextOverflow.ellipsis),
-                  ),
+            ExpansionTile(
+              key: const ValueKey('habit-history-expand'),
+              title: const Text('打卡历史'),
+              subtitle: const Text('月热力图 · 补记与撤销'),
+              children: [
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  key: ValueKey('habit-history-select-${historyHabit.id}'),
+                  initialValue: historyHabit.id,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: '查看习惯'),
+                  items: [
+                    for (final habit in habits)
+                      DropdownMenuItem(
+                        value: habit.id,
+                        child: Text(
+                          habit.name,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() => _historyHabit = value),
+                ),
+                const SizedBox(height: 12),
+                _monthHistory(historyHabit),
               ],
-              onChanged: (value) => setState(() => _historyHabit = value),
             ),
-            const SizedBox(height: 12),
-            _monthHistory(historyHabit),
           ],
           const SizedBox(height: 16),
           Text(
@@ -207,7 +239,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
         continue;
       }
       planned++;
-      if (_value(habit, day) >= habit.goal) {
+      if (_value(habit, day) >= _goal(habit, day)) {
         achieved++;
       }
     }
@@ -426,11 +458,12 @@ class _HabitsScreenState extends State<HabitsScreen> {
     final colors = Theme.of(context).colorScheme;
     final value = _value(habit, day);
     final enabled = !day.isAfter(_today) && _scheduled(habit, day);
-    final done = value >= habit.goal;
+    final target = _goal(habit, day);
+    final done = value >= target;
     return Semantics(
-      label: '${dateKey(day)} ${habit.name} $value/${habit.goal}',
+      label: '${dateKey(day)} ${habit.name} $value/$target',
       child: Tooltip(
-        message: '${day.month}月${day.day}日 · $value/${habit.goal}',
+        message: '${day.month}月${day.day}日 · $value/$target',
         child: Material(
           color: done
               ? colors.primary
@@ -484,14 +517,16 @@ class _HabitsScreenState extends State<HabitsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('${day.month}月${day.day}日 · ${habit.name}'),
-        content: habit.goalType == 'bool'
+        content: habit.goalType == 'bool' && _goal(habit, day) == 1
             ? const Text('补记或撤销这一天的打卡。')
             : TextFormField(
                 key: const ValueKey('habit-history-value'),
                 initialValue: input,
                 onChanged: (value) => input = value,
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: '完成次数（目标${habit.goal}）'),
+                decoration: InputDecoration(
+                  labelText: '完成次数（目标${_goal(habit, day)}）',
+                ),
               ),
         actions: [
           TextButton(
@@ -504,7 +539,9 @@ class _HabitsScreenState extends State<HabitsScreen> {
           ),
           FilledButton(
             onPressed: () {
-              final value = habit.goalType == 'bool' ? 1 : int.tryParse(input);
+              final value = habit.goalType == 'bool' && _goal(habit, day) == 1
+                  ? 1
+                  : int.tryParse(input);
               if (value != null && value >= 0 && value <= 100000) {
                 Navigator.pop(context, value);
               }

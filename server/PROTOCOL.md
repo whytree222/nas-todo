@@ -166,6 +166,10 @@ docker compose exec todo-sync python /app/app.py --backup /data/backups/todo-202
 
 ## 验证
 
+v0.11新增可选响应字段`achievement_v2`（version=2），保留原`achievement`作为旧客户端的待办口径投影。新周记录包含task_total/task_completed和habit_total/habit_completed；两类分别≥80%才得星，无计划类别不参与。已结算旧记录不回算。
+
+habit_achievement_plans保存按日期生效的执行日、次数目标和启用状态。新规则激活日记在metadata；已有习惯从该日开始计。新客户端的habit操作可携带plan_history数组，与操作ID哈希一起去重、事务保存，断网期间的计划变化不丢失；旧NAS请求继续使用原六字段个人操作，发送形状在首次尝试时持久化，升级后重试不改变已发送载荷。日期按NAS激活日和当日限制，已结算月份不被晚到计划重写。习惯历史随同一SQLite备份保留，不参加待办清理。
+
 ```sh
 python -B -m unittest discover -s server/tests -v
 ```

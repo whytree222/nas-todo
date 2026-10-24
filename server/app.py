@@ -51,6 +51,62 @@ def month_achievement(month: str, tasks: list[dict[str, Any]], *, settled: bool 
             "settled": settled, "cleaned": 0}
 
 
+def habit_month_achievement(month, tasks, plans, checkins, *, through=None, settled=False):
+    """Both nonempty categories must reach 80%; each scheduled habit-day weighs one."""
+    report = month_achievement(month, tasks, settled=settled)
+    report['rules_version'] = 2
+    histories = {}
+    for plan in plans:
+        histories.setdefault(plan['habit_id'], []).append(plan)
+    for history in histories.values():
+        history.sort(key=lambda p: p['effective_from'])
+    values = {(c['habit_id'], c['date']): c['value'] for c in checkins}
+    for week in report['weeks']:
+        planned = completed = 0
+        end = dt.date.fromisoformat(week['end'])
+        if through is not None:
+            end = min(end, through)
+        day = dt.date.fromisoformat(week['start'])
+        while day <= end:
+            key = day.isoformat()
+            for habit_id, history in histories.items():
+                plan = next((p for p in reversed(history) if p['effective_from'] <= key), None)
+                if plan is None or not plan['active'] or day.weekday() + 1 not in plan['weekdays']:
+                    continue
+                planned += 1
+                completed += values.get((habit_id, key), 0) >= plan['goal']
+            day += dt.timedelta(days=1)
+        week.update(task_total=week['total'], task_completed=week['completed'],
+                    habit_total=planned, habit_completed=completed)
+        week['total'] += planned
+        week['completed'] += completed
+        week['star'] = week['total'] > 0 and (week['task_total'] == 0 or week['task_completed'] * 5 >= week['task_total'] * 4) and (planned == 0 or completed * 5 >= planned * 4)
+    report['total'] = sum(w['total'] for w in report['weeks'])
+    report['completed'] = sum(w['completed'] for w in report['weeks'])
+    report['stars'] = sum(w['star'] for w in report['weeks'])
+    active = [w for w in report['weeks'] if w['total'] > 0]
+    report['status'] = 'empty' if not active else 'green' if all(w['star'] for w in active) else 'red'
+    return report
+
+
+def task_only_achievement(report):
+    """Continue serving the original score contract to pre-v0.11 clients."""
+    if report.get('rules_version', 1) == 1:
+        return report
+    result = json.loads(json.dumps(report))
+    result.pop('rules_version', None)
+    for week in result['weeks']:
+        week['total'] = week.pop('task_total')
+        week['completed'] = week.pop('task_completed')
+        week.pop('habit_total', None)
+        week.pop('habit_completed', None)
+        week['star'] = week['total'] > 0 and week['completed'] * 5 >= week['total'] * 4
+    active = [w for w in result['weeks'] if w['total'] > 0]
+    result.update(total=sum(w['total'] for w in active), completed=sum(w['completed'] for w in active),
+                  stars=sum(w['star'] for w in active), status='empty' if not active else 'green' if all(w['star'] for w in active) else 'red')
+    return result
+
+
 MAX_BODY_BYTES = 1024 * 1024
 MAX_OPERATIONS = 100
 MAX_SQLITE_INT = (1 << 63) - 1
@@ -202,6 +258,43 @@ class PersonalFeatures:
         used = connection.execute('SELECT coalesce(sum(length(cast(data_json AS BLOB))),0) FROM personal_records').fetchone()[0]
         connection.execute("INSERT OR IGNORE INTO metadata(key,value) VALUES('personal_data_bytes',?)", (str(used),))
 
+    def _initialize_habit_achievements(self, connection):
+        connection.execute("CREATE TABLE IF NOT EXISTS habit_achievement_plans (habit_id TEXT NOT NULL,effective_from TEXT NOT NULL,data_json TEXT NOT NULL,PRIMARY KEY(habit_id,effective_from))")
+        enabled = connection.execute("SELECT value FROM metadata WHERE key='habit_achievement_start'").fetchone()
+        if enabled is None:
+            day = self.clock().isoformat()
+            connection.execute("INSERT INTO metadata(key,value) VALUES('habit_achievement_start',?)", (day,))
+            # Existing habits enter the new rule today; no invented obligations before upgrade.
+            for row in connection.execute("SELECT * FROM personal_records WHERE kind='habit' AND deleted=0").fetchall():
+                self._save_habit_plan(connection, row['id'], json.loads(row['data_json']), False)
+
+    def _save_habit_plan(self, connection, habit_id, data, deleted):
+        plan = {'goal': data['goal'], 'weekdays': data['weekdays'], 'active': not deleted}
+        latest = connection.execute('SELECT data_json FROM habit_achievement_plans WHERE habit_id=? ORDER BY effective_from DESC LIMIT 1', (habit_id,)).fetchone()
+        if latest is not None and latest[0] == encode_json(plan):
+            return
+        connection.execute('INSERT INTO habit_achievement_plans VALUES(?,?,?) ON CONFLICT(habit_id,effective_from) DO UPDATE SET data_json=excluded.data_json',
+                           (habit_id, self.clock().isoformat(), encode_json(plan)))
+
+    def _habit_plans(self, connection):
+        return [dict(habit_id=row['habit_id'], effective_from=row['effective_from'], **json.loads(row['data_json']))
+                for row in connection.execute('SELECT * FROM habit_achievement_plans ORDER BY habit_id,effective_from')]
+
+    def _habit_report(self, connection, month, tasks, *, settled=False):
+        checkins = [json.loads(row[0]) for row in connection.execute("SELECT data_json FROM personal_records WHERE kind='habit_checkin' AND deleted=0")]
+        return habit_month_achievement(month, tasks, self._habit_plans(connection), checkins,
+                                      through=None if settled else self.clock(), settled=settled)
+
+    def _achievement_state_v2(self, connection):
+        today = self.clock()
+        month = today.strftime('%Y-%m')
+        tasks = [row_to_task(row) for row in connection.execute('SELECT * FROM tasks WHERE deleted=0 AND due_date>=? AND due_date<?',
+                 (month + '-01', following_month(today).isoformat()))]
+        return {'version': 2, 'today': today.isoformat(), 'start_month': connection.execute("SELECT value FROM metadata WHERE key='achievement_start_month'").fetchone()[0],
+                'habit_started_on': connection.execute("SELECT value FROM metadata WHERE key='habit_achievement_start'").fetchone()[0],
+                'habit_plans': self._habit_plans(connection), 'live': self._habit_report(connection, month, tasks),
+                'settled': [json.loads(row[0]) for row in connection.execute('SELECT report_json FROM achievement_months ORDER BY month')]}
+
     def _personal_row(self, row):
         if row is None:
             return None
@@ -220,6 +313,8 @@ class PersonalFeatures:
                            (kind, record_id, encoded, int(deleted), old["version"] + 1 if old else 1, utc_now(), cursor))
         connection.execute("UPDATE metadata SET value=? WHERE key='personal_data_bytes'", (str(size),))
         connection.execute("UPDATE metadata SET value=? WHERE key='personal_cursor'", (str(cursor),))
+        if kind == 'habit':
+            self._save_habit_plan(connection, record_id, data, deleted)
         return self._personal_row(connection.execute("SELECT * FROM personal_records WHERE kind=? AND id=?", (kind, record_id)).fetchone())
 
     def _personal_data(self, kind, value):
@@ -280,7 +375,9 @@ class PersonalFeatures:
             return True
         if kind == 'habit_checkin':
             habit = connection.execute("SELECT * FROM personal_records WHERE kind='habit' AND id=? AND deleted=0", (data['habit_id'],)).fetchone()
-            return habit is not None and record_id == data['habit_id'] + ':' + data['date'] and (json.loads(habit['data_json'])['goal_type'] != 'bool' or data['value'] <= 1)
+            plan = connection.execute('SELECT data_json FROM habit_achievement_plans WHERE habit_id=? AND effective_from<=? ORDER BY effective_from DESC LIMIT 1', (data['habit_id'], data['date'])).fetchone()
+            historic_goal = json.loads(plan[0])['goal'] if plan else 1
+            return habit is not None and record_id == data['habit_id'] + ':' + data['date'] and (json.loads(habit['data_json'])['goal_type'] != 'bool' or historic_goal > 1 or data['value'] <= 1)
         task = connection.execute('SELECT * FROM tasks WHERE id=? AND deleted=0', (record_id,)).fetchone()
         if task is None or (data['repeat_rule'] is not None and task['due_date'] is None):
             return False
@@ -382,7 +479,9 @@ class PersonalFeatures:
             raise ApiError(400, 'invalid_request', 'At most 100 personal operations are allowed')
         ops, seen = [], set()
         for raw in raw_ops:
-            op = require_keys(raw, {'op_id', 'kind', 'id', 'base_version', 'action', 'data'}, 'personal operation')
+            plan_history = raw.get('plan_history') if isinstance(raw, dict) else None
+            raw_base = {key: value for key, value in raw.items() if key != 'plan_history'} if isinstance(raw, dict) else raw
+            op = require_keys(raw_base, {'op_id', 'kind', 'id', 'base_version', 'action', 'data'}, 'personal operation')
             op_id = require_uuid(op['op_id'], 'op_id')
             if op_id in seen:
                 raise ApiError(400, 'duplicate_operation', 'Duplicate operation')
@@ -398,6 +497,25 @@ class PersonalFeatures:
                 raise ApiError(400, 'invalid_request', 'Invalid personal action')
             data = self._personal_data(kind, op['data'])
             ops.append({'op_id': op_id, 'kind': kind, 'id': record_id, 'base_version': base, 'action': op['action'], 'data': data})
+            if plan_history is not None:
+                if kind != 'habit' or not isinstance(plan_history, list) or len(plan_history) > 1000:
+                    raise ApiError(400, 'invalid_request', 'Invalid habit plan history')
+                normalized = []
+                for entry in plan_history:
+                    entry = require_keys(entry, {'habit_id', 'effective_from', 'goal', 'weekdays', 'active'}, 'habit plan')
+                    if entry['habit_id'] != record_id or type(entry['active']) is not bool:
+                        raise ApiError(400, 'invalid_request', 'Habit plan identity mismatch')
+                    goal = require_integer(entry['goal'], 'goal')
+                    if not 1 <= goal <= 100000:
+                        raise ApiError(400, 'invalid_request', 'Invalid habit plan goal')
+                    normalized.append({'habit_id': record_id, 'effective_from': self._personal_date(entry['effective_from']),
+                                       'goal': goal, 'weekdays': self._weekdays(entry['weekdays'], nonempty=True), 'active': entry['active']})
+                normalized.sort(key=lambda p: p['effective_from'])
+                if len({p['effective_from'] for p in normalized}) != len(normalized):
+                    raise ApiError(400, 'invalid_request', 'Duplicate habit plan date')
+                if normalized and (normalized[-1]['goal'] != data['goal'] or normalized[-1]['weekdays'] != data['weekdays'] or normalized[-1]['active'] != (op['action'] != 'delete')):
+                    raise ApiError(400, 'invalid_request', 'Latest habit plan must match the habit')
+                ops[-1]['plan_history'] = normalized
         connection = self.connect()
         try:
             connection.execute('BEGIN IMMEDIATE')
@@ -432,6 +550,16 @@ class PersonalFeatures:
                     data = json.loads(old['data_json']) if op['action'] == 'delete' else op['data']
                     record = self._put_personal(connection, op['kind'], op['id'], data, deleted=op['action'] == 'delete')
                     result = {'op_id': op['op_id'], 'status': 'applied', 'record': record}
+                if result['status'] == 'applied' and op.get('plan_history'):
+                    activated = connection.execute("SELECT value FROM metadata WHERE key='habit_achievement_start'").fetchone()[0]
+                    for plan in op['plan_history']:
+                        day = min(self.clock().isoformat(), max(activated, plan['effective_from']))
+                        # Never change a settled month's obligations on a late offline upload.
+                        if connection.execute('SELECT 1 FROM achievement_months WHERE month=?', (day[:7],)).fetchone():
+                            continue
+                        payload = {key: plan[key] for key in ('goal', 'weekdays', 'active')}
+                        connection.execute('INSERT INTO habit_achievement_plans VALUES(?,?,?) ON CONFLICT(habit_id,effective_from) DO UPDATE SET data_json=excluded.data_json',
+                                           (op['id'], day, encode_json(payload)))
                 connection.execute('INSERT INTO personal_operations VALUES(?,?,?)', (op['op_id'], hashes[op['op_id']], encode_json(result)))
                 results.append(result)
             blocked = {op['id'] for op, result in zip(ops, results) if op['kind'] == 'task_meta' and result['status'] == 'conflict'}
@@ -442,8 +570,9 @@ class PersonalFeatures:
             generated = self._generate_repeats(connection)
             changes = [self._personal_row(row) for row in connection.execute('SELECT * FROM personal_records WHERE change_seq>? ORDER BY change_seq', (cursor,))]
             latest = int(connection.execute("SELECT value FROM metadata WHERE key='personal_cursor'").fetchone()[0])
+            achievement = self._achievement_state_v2(connection)
             connection.commit()
-            return {'instance_id': instance, 'cursor': latest, 'changes': changes, 'results': results, 'generated_tasks': generated, 'released_tasks': released}
+            return {'instance_id': instance, 'cursor': latest, 'changes': changes, 'results': results, 'generated_tasks': generated, 'released_tasks': released, 'achievement_v2': achievement}
         except BaseException:
             connection.rollback()
             raise
@@ -503,6 +632,7 @@ class SyncService(PersonalFeatures):
             connection.execute("INSERT OR IGNORE INTO metadata(key,value) VALUES('achievement_start_month',?)", (month,))
             connection.execute("INSERT OR IGNORE INTO metadata(key,value) VALUES('achievement_next_month',?)", (month,))
             self._initialize_personal(connection)
+            self._initialize_habit_achievements(connection)
             connection.execute("PRAGMA user_version=1")
             connection.commit()
         except BaseException:
@@ -521,7 +651,7 @@ class SyncService(PersonalFeatures):
             rows = connection.execute("SELECT * FROM tasks WHERE deleted=0 AND due_date>=? AND due_date<?",
                                       (first.isoformat(), after.isoformat())).fetchall()
             tasks = [row_to_task(row) for row in rows]
-            report = month_achievement(next_month, tasks, settled=True)
+            report = self._habit_report(connection, next_month, tasks, settled=True)
             cleaned = [task for task in tasks if task['list_name'].strip() not in UNCATEGORIZED_LISTS]
             report['cleaned'] = len(cleaned)
             connection.execute("INSERT INTO achievement_months(month,report_json) VALUES(?,?)",
@@ -561,7 +691,7 @@ class SyncService(PersonalFeatures):
             (month + '-01', following_month(today).isoformat()))]
         return {'version': 1, 'today': today.isoformat(), 'start_month': connection.execute(
             "SELECT value FROM metadata WHERE key='achievement_start_month'").fetchone()[0],
-            'live': month_achievement(month, tasks), 'settled': [json.loads(row[0]) for row in connection.execute(
+            'live': month_achievement(month, tasks), 'settled': [task_only_achievement(json.loads(row[0])) for row in connection.execute(
                 'SELECT report_json FROM achievement_months ORDER BY month')]}
 
     def sync(self, value: Any) -> dict[str, Any]:
@@ -658,6 +788,7 @@ class SyncService(PersonalFeatures):
             response = {"instance_id": instance_id, "cursor": cursor, "changes": changes, "results": results}
             response['personal_sync'] = 1
             response['achievement'] = self._achievement_state(connection)
+            response['achievement_v2'] = self._achievement_state_v2(connection)
             connection.commit()
             return response
         except BaseException:

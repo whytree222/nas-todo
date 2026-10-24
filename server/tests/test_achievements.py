@@ -94,7 +94,7 @@ class AchievementTest(unittest.TestCase):
         backup_database(self.path, snapshot)
         connection = sqlite3.connect(snapshot)
         saved = json.loads(connection.execute("SELECT report_json FROM achievement_months WHERE month='2026-12'").fetchone()[0])
-        self.assertEqual(saved, december_report)
+        self.assertEqual(saved, response['achievement_v2']['settled'][-1])
         self.assertEqual(connection.execute("SELECT count(*) FROM achievement_archive WHERE month='2026-12'").fetchone()[0], 1)
         connection.close()
 

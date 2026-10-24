@@ -45,7 +45,9 @@ Future<void> _choose(WidgetTester tester, String key) async {
 
 void main() {
   for (final width in [320.0, 390.0]) {
-    testWidgets('Phone $width can change app and widget colors independently', (tester) async {
+    testWidgets('Phone $width can change app and widget colors independently', (
+      tester,
+    ) async {
       _size(tester, Size(width, 844));
       final controller = await _controller();
       addTearDown(controller.dispose);
@@ -59,13 +61,19 @@ void main() {
       await _choose(tester, 'app-theme-black');
       expect(controller.appTheme, TodoThemeColor.black);
       expect(controller.effectiveWidgetTheme, TodoThemeColor.black);
-      expect(tester.widget<MaterialApp>(find.byType(MaterialApp)).theme!.brightness, Brightness.dark);
+      expect(
+        tester.widget<MaterialApp>(find.byType(MaterialApp)).theme!.brightness,
+        Brightness.dark,
+      );
       await _choose(tester, 'widget-theme-blue');
       expect(controller.appTheme, TodoThemeColor.black);
       expect(controller.widgetTheme, TodoThemeColor.blue);
       await _choose(tester, 'app-theme-white');
       expect(controller.effectiveWidgetTheme, TodoThemeColor.blue);
-      expect(tester.widget<MaterialApp>(find.byType(MaterialApp)).theme!.brightness, Brightness.light);
+      expect(
+        tester.widget<MaterialApp>(find.byType(MaterialApp)).theme!.brightness,
+        Brightness.light,
+      );
       await _choose(tester, 'widget-theme-follow');
       expect(controller.widgetTheme, isNull);
       expect(controller.effectiveWidgetTheme, TodoThemeColor.white);
@@ -73,44 +81,76 @@ void main() {
     });
   }
 
-  testWidgets('Black palette reaches the editor, date picker, calendar, and agenda', (tester) async {
-    _size(tester, const Size(390, 844));
-    final controller = await _controller();
-    addTearDown(controller.dispose);
-    await controller.saveTask(TaskDraft(title: '黑色主题待办', dueDate: dateKey(DateTime.now())));
-    await controller.setAppearance(TodoThemeColor.black, null);
-    await tester.pumpWidget(PrivateTodoApp(controller: controller));
-    await tester.pumpAndSettle();
-    final dark = buildTodoTheme(TodoThemeColor.black);
-    await tester.tap(find.text('新建待办'));
-    await tester.pumpAndSettle();
-    final editor = tester.widget<AlertDialog>(find.byType(AlertDialog));
-    expect(editor.backgroundColor, dark.colorScheme.surface);
-    expect(Theme.of(tester.element(find.byKey(const ValueKey('task-title')))).brightness, Brightness.dark);
-    await tester.tap(find.text('不设日期'));
-    await tester.pumpAndSettle();
-    expect(Theme.of(tester.element(find.byType(DatePickerDialog))).brightness, Brightness.dark);
-    await tester.tap(find.text('取消').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('取消'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('日历'));
-    await tester.pumpAndSettle();
-    final now = DateTime.now();
-    final unselectedDate = DateTime(now.year, now.month, now.day == 15 ? 14 : 15);
-    final day = find.byKey(ValueKey('day-${dateKey(unselectedDate)}'));
-    await tester.ensureVisible(day);
-    await tester.pumpAndSettle();
-    final cell = tester.widget<Material>(find.ancestor(of: day, matching: find.byType(Material)).first);
-    expect(cell.color, dark.colorScheme.surface);
-    final agenda = find.byType(AgendaTask);
-    await tester.scrollUntilVisible(agenda, 180,
-      scrollable: find.descendant(of: find.byType(CalendarScreen),
-        matching: find.byType(Scrollable)).first);
-    await tester.pumpAndSettle();
-    final card = tester.widget<Card>(find.descendant(of: agenda, matching: find.byType(Card)).first);
-    expect(card.color, dark.colorScheme.surface);
-    expect(Theme.of(tester.element(find.byType(CalendarScreen))).brightness, Brightness.dark);
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'Black palette reaches the editor, date picker, calendar, and agenda',
+    (tester) async {
+      _size(tester, const Size(390, 844));
+      final controller = await _controller();
+      addTearDown(controller.dispose);
+      await controller.saveTask(
+        TaskDraft(title: '黑色主题待办', dueDate: dateKey(DateTime.now())),
+      );
+      await controller.setAppearance(TodoThemeColor.black, null);
+      await tester.pumpWidget(PrivateTodoApp(controller: controller));
+      await tester.pumpAndSettle();
+      final dark = buildTodoTheme(TodoThemeColor.black);
+      await tester.tap(find.byTooltip('完整新建'));
+      await tester.pumpAndSettle();
+      final editor = tester.widget<Material>(
+        find.byKey(const ValueKey('task-editor-surface')),
+      );
+      expect(editor.color, dark.colorScheme.surface);
+      expect(
+        Theme.of(tester.element(find.byKey(const ValueKey('task-title'))))
+            .brightness,
+        Brightness.dark,
+      );
+      await tester.tap(find.text('不设日期'));
+      await tester.pumpAndSettle();
+      expect(
+        Theme.of(tester.element(find.byType(DatePickerDialog))).brightness,
+        Brightness.dark,
+      );
+      await tester.tap(find.text('取消').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('日历'));
+      await tester.pumpAndSettle();
+      final now = DateTime.now();
+      final unselectedDate = DateTime(
+        now.year,
+        now.month,
+        now.day == 15 ? 14 : 15,
+      );
+      final day = find.byKey(ValueKey('day-${dateKey(unselectedDate)}'));
+      await tester.ensureVisible(day);
+      await tester.pumpAndSettle();
+      final cell = tester.widget<Material>(
+        find.ancestor(of: day, matching: find.byType(Material)).first,
+      );
+      expect(cell.color, dark.colorScheme.surface);
+      final agenda = find.byType(AgendaTask);
+      await tester.scrollUntilVisible(
+        agenda,
+        180,
+        scrollable: find
+            .descendant(
+              of: find.byType(CalendarScreen),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
+      final card = tester.widget<Card>(
+        find.descendant(of: agenda, matching: find.byType(Card)).first,
+      );
+      expect(card.color, dark.colorScheme.surface);
+      expect(
+        Theme.of(tester.element(find.byType(CalendarScreen))).brightness,
+        Brightness.dark,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
