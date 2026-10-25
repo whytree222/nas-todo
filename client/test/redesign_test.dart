@@ -213,6 +213,8 @@ void main() {
       await controller.saveTask(const TaskDraft(title: '原任务'));
       await tester.pumpWidget(PrivateTodoApp(controller: controller));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('全部待办').last);
+      await tester.pumpAndSettle();
       await tester.tap(find.text('原任务'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('编辑待办'));

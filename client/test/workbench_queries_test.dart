@@ -44,7 +44,6 @@ void main() {
 
   test('Smart views exclude tombstones and separate completed work', () {
     expect(ids(SmartTaskView.all), [
-      'past',
       'today',
       'tomorrow',
       'weekEnd',
@@ -57,6 +56,35 @@ void main() {
     expect(ids(SmartTaskView.overdue), ['past']);
     expect(ids(SmartTaskView.unscheduled), ['undated']);
   });
+
+  test(
+    'All hides overdue without deleting them or hiding them from their list',
+    () {
+      expect(
+        queryWorkbenchTasks(
+          tasks,
+          view: SmartTaskView.all,
+          now: day,
+          listName: '工作',
+        ).map((t) => t.id),
+        contains('past'),
+      );
+      expect(ids(SmartTaskView.overdue), ['past']);
+      expect(tasks.first.dueDate, '2026-12-28');
+      expect(
+        ids(SmartTaskView.all),
+        containsAll(['today', 'tomorrow', 'undated']),
+      );
+      expect(
+        queryWorkbenchTasks(
+          tasks,
+          view: SmartTaskView.all,
+          now: DateTime(2026, 12, 30),
+        ).map((t) => t.id),
+        isNot(contains('today')),
+      );
+    },
+  );
 
   test(
     'Next seven days includes today through day six across a year boundary',

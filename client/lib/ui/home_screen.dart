@@ -33,7 +33,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen>
     with WidgetsBindingObserver, RouteAware {
   final _search = TextEditingController();
-  int _page = 0;
+  int _page = 1;
   String? _selectedList;
   String _sort = 'due';
   bool _celebrationScheduled = false;
@@ -193,7 +193,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  SmartTaskView _smartView = SmartTaskView.all;
+  SmartTaskView _smartView = SmartTaskView.today;
   String _presentation = 'list';
   int? _priorityFilter;
   String? _selectedTaskId;
@@ -219,20 +219,17 @@ class _HomeScreenState extends State<HomeScreen>
   GlobalKey<TaskEditorState> _inlineEditorKey = GlobalKey<TaskEditorState>();
   void _restoreWorkspace() {
     final saved = widget.controller.workspace;
-    _page = saved.page;
-    _smartView =
-        SmartTaskView.values
-            .where((v) => v.name == saved.smartView)
-            .firstOrNull ??
-        SmartTaskView.all;
-    _selectedList = saved.listName;
-    _selectedTag = saved.tag;
-    _presentation = saved.presentation;
+    // Every fresh launch starts with an unfiltered Today list.
+    _page = 1;
+    _smartView = SmartTaskView.today;
+    _selectedList = null;
+    _selectedTag = null;
+    _presentation = 'list';
     _detailVisible = saved.detailVisible;
-    _selectedTaskId = saved.selectedTaskId;
+    _selectedTaskId = null;
     _sort = saved.sort;
-    _priorityFilter = saved.priority;
-    _taskScroll = ScrollController(initialScrollOffset: saved.scrollOffset);
+    _priorityFilter = null;
+    _taskScroll = ScrollController();
   }
 
   Map<String, dynamic> _workspaceSnapshot() => {

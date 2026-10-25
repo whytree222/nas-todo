@@ -69,7 +69,12 @@ List<Task> queryWorkbenchTasks(
       return false;
     }
     return switch (view) {
-      SmartTaskView.all || SmartTaskView.completed => true,
+      SmartTaskView.all =>
+        listName != null ||
+            tag != null ||
+            task.dueDate == null ||
+            task.dueDate!.compareTo(today) >= 0,
+      SmartTaskView.completed => true,
       SmartTaskView.inbox => const {
         '',
         '收件箱',

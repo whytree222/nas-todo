@@ -66,6 +66,32 @@ void _size(WidgetTester tester, Size size) {
 }
 
 void main() {
+  testWidgets(
+    'Rules stay behind one button and dialog remains readable on a narrow phone',
+    (tester) async {
+      _size(tester, const Size(320, 568));
+      final engine = SyncEngine(_Store(), _Transport());
+      await engine.load();
+      final controller = AppController.forTesting(engine);
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: AchievementsScreen(controller: controller)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('周一至周日分段'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('achievement-rules')));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.textContaining('周一至周日分段'), findsOneWidget);
+      await tester.tap(find.text('知道了'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   test('Exactly 80 percent earns a star; any active failing week makes the month red', () {
     final tasks = [
       for (var i = 0; i < 5; i++)

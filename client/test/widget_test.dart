@@ -103,6 +103,8 @@ void main() {
 
       expect(find.byType(NavigationBar), findsNothing);
       expect(find.text('私有待办'), findsOneWidget);
+      await tester.tap(find.text('全部待办').last);
+      await tester.pumpAndSettle();
       expect(find.text('检查磁盘空间'), findsOneWidget);
       await tester.tap(find.text('NAS 维护').first);
       await tester.pumpAndSettle();

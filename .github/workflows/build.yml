@@ -113,7 +113,7 @@ jobs:
           python - <<'PY'
           import base64, os
           from pathlib import Path
-          for name in ('workbench-desktop.png', 'workbench-phone.png', 'workbench-board.png', 'workbench-matrix.png', 'workbench-habits.png', 'workbench-calendar.png', 'workbench-editor-desktop.png', 'workbench-editor-phone.png'):
+          for name in ('workbench-desktop.png', 'workbench-phone.png', 'workbench-board.png', 'workbench-matrix.png', 'workbench-habits.png', 'workbench-calendar.png', 'workbench-editor-desktop.png', 'workbench-editor-phone.png', 'workbench-achievements-desktop.png', 'workbench-achievements-phone.png'):
               path = Path(os.environ['NAS_TODO_TEST_TMP']) / name
               if not path.is_file():
                   raise RuntimeError(f'Missing workbench preview: {name}')

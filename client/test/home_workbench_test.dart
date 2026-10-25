@@ -97,6 +97,38 @@ Future<void> _drawer(WidgetTester tester, String label) async {
 }
 
 void main() {
+  for (final desktop in [true, false]) {
+    testWidgets(
+      'Fresh launch opens Today despite saved filters and page on ${desktop ? "desktop" : "phone"}',
+      (tester) async {
+        _size(tester, desktop ? const Size(1440, 900) : const Size(390, 844));
+        final controller = await _controller();
+        await _seed(controller);
+        await controller.setWorkspace({
+          'page': 5,
+          'smart_view': 'all',
+          'list_name': '工作',
+          'tag': '工作',
+          'priority': 0,
+          'presentation': 'matrix',
+          'scroll_offset': 400,
+        });
+        await tester.pumpWidget(PrivateTodoApp(controller: controller));
+        await tester.pumpAndSettle();
+        expect(find.text('准备周末的旅行计划'), findsOneWidget);
+        expect(find.text('把产品方案画清楚'), findsNothing);
+        expect(find.byType(TaskMatrixView), findsNothing);
+        await controller.setWorkspace({'page': 6});
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+        await tester.pumpWidget(PrivateTodoApp(controller: controller));
+        await tester.pumpAndSettle();
+        expect(find.text('准备周末的旅行计划'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets(
     'Desktop workbench keeps compact list, real details and editing',
     (tester) async {
@@ -104,6 +136,8 @@ void main() {
       final controller = await _controller();
       await _seed(controller);
       await tester.pumpWidget(PrivateTodoApp(controller: controller));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('全部待办').last);
       await tester.pumpAndSettle();
       expect(find.byType(TaskDetailPane), findsOneWidget);
       expect(find.text('把下一步看清楚'), findsOneWidget);
@@ -300,6 +334,8 @@ void main() {
           );
           await tester.pumpAndSettle();
           if (desktop) {
+            await tester.tap(find.text('全部待办').last);
+            await tester.pumpAndSettle();
             final task = controller.tasks.firstWhere(
               (task) => task.title == '把产品方案画清楚',
             );
@@ -337,6 +373,13 @@ void main() {
             await tester.pumpAndSettle();
             await _preview(tester, 'workbench-calendar.png', font != null);
           }
+          await tester.tap(desktop ? find.byTooltip('成就') : find.text('成就'));
+          await tester.pumpAndSettle();
+          await _preview(
+            tester,
+            'workbench-achievements-${desktop ? 'desktop' : 'phone'}.png',
+            font != null,
+          );
           await tester.tap(
             desktop
                 ? find.byTooltip('待办工作台')
