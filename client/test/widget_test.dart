@@ -64,6 +64,11 @@ void main() {
 
       await tester.tap(find.byType(Checkbox).first);
       await tester.pumpAndSettle();
+      final encouragement = find.byKey(const ValueKey('daily-celebration-close'));
+      if (encouragement.evaluate().isNotEmpty) {
+        await tester.tap(encouragement);
+        await tester.pumpAndSettle();
+      }
       expect(controller.tasks.single.completed, isTrue);
       expect(find.text('整理 NAS 备份'), findsNothing);
       await tester.tap(find.byTooltip('清单与智能视图'));

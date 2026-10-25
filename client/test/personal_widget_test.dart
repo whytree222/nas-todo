@@ -242,7 +242,8 @@ void main() {
       await controller.saveTask(TaskDraft(title: '第一步', parentId: parent.id));
       await tester.pumpWidget(PrivateTodoApp(controller: controller));
       await tester.pumpAndSettle();
-      await _drawer(tester, '全部待办');
+      await tester.tap(find.text('全部待办').last);
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(ValueKey('task-expand-${parent.id}')));
       await tester.pumpAndSettle();
       expect(find.text('第一步'), findsNothing);
