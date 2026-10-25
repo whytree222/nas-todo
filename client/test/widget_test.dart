@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nas_todo/app_controller.dart';
 import 'package:nas_todo/main.dart';
 import 'package:nas_todo/sync_core.dart';
+import 'package:nas_todo/task_dates.dart';
 
 class _MemoryStore implements DataStore {
   Map<String, dynamic>? state;
@@ -48,7 +49,7 @@ void main() {
       await tester.pumpWidget(PrivateTodoApp(controller: controller));
       await tester.pumpAndSettle();
 
-      expect(find.text('从一件小事开始'), findsOneWidget);
+      expect(find.text('今天没有到期待办'), findsOneWidget);
       expect(find.byType(NavigationBar), findsOneWidget);
       await tester.tap(find.byTooltip('完整新建'));
       await tester.pumpAndSettle();
@@ -64,7 +65,9 @@ void main() {
 
       await tester.tap(find.byType(Checkbox).first);
       await tester.pumpAndSettle();
-      final encouragement = find.byKey(const ValueKey('daily-celebration-close'));
+      final encouragement = find.byKey(
+        const ValueKey('daily-celebration-close'),
+      );
       if (encouragement.evaluate().isNotEmpty) {
         await tester.tap(encouragement);
         await tester.pumpAndSettle();
@@ -150,7 +153,9 @@ void main() {
       _size(tester, const Size(390, 844));
       final controller = await _controller();
       addTearDown(controller.dispose);
-      await controller.saveTask(const TaskDraft(title: '原始标题'));
+      await controller.saveTask(
+        TaskDraft(title: '原始标题', dueDate: dateKey(DateTime.now())),
+      );
       final id = controller.tasks.single.id;
       await tester.pumpWidget(PrivateTodoApp(controller: controller));
       await tester.pumpAndSettle();

@@ -105,7 +105,7 @@ void main() {
             .brightness,
         Brightness.dark,
       );
-      await tester.tap(find.text('不设日期'));
+      await tester.tap(find.byIcon(Icons.calendar_today_outlined));
       await tester.pumpAndSettle();
       expect(
         Theme.of(tester.element(find.byType(DatePickerDialog))).brightness,
