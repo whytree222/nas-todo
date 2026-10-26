@@ -380,6 +380,21 @@ void main() {
             'workbench-achievements-${desktop ? 'desktop' : 'phone'}.png',
             font != null,
           );
+          await controller.saveTask(
+            const TaskDraft(title: '本周读完一本喜欢的书', listName: '周待办', priority: 1),
+          );
+          if (desktop) {
+            await tester.tap(find.byTooltip('周待办'));
+            await tester.pumpAndSettle();
+          } else {
+            await _drawer(tester, '周待办');
+          }
+          await _preview(
+            tester,
+            'workbench-weekly-${desktop ? 'desktop' : 'phone'}.png',
+            font != null,
+          );
+
           await tester.tap(
             desktop
                 ? find.byTooltip('待办工作台')

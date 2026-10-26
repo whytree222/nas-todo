@@ -414,6 +414,29 @@ class SyncEngine {
   Future<void> saveTask(TaskDraft draft, {String? id}) =>
       _serial(() => _saveDraft(draft, id: id));
 
+  Future<void> deleteList(String name) => _serial(() async {
+    _checkLoaded();
+    if (name.trim().isEmpty || name == '收件箱') {
+      throw ArgumentError('收件箱不能删除');
+    }
+    final changes = tasks
+        .where((task) => !task.deleted && task.listName == name)
+        .map(
+          (task) => _prepareDraft(
+            TaskDraft.fromTask(task).copyWith(listName: '收件箱'),
+            id: task.id,
+          ),
+        )
+        .toList();
+    if (changes.isEmpty) return;
+    // One durable write: a failed move must not leave half the list behind.
+    await _commit(() {
+      for (final change in changes) {
+        change();
+      }
+    });
+  });
+
   Future<TaskCompletionChange> setCompleted(String id, bool completed) =>
       _serial(() async {
         _checkLoaded();
@@ -543,7 +566,10 @@ class SyncEngine {
     await _saveDraft(draft, id: task.id);
   }
 
-  Future<void> _saveDraft(TaskDraft draft, {String? id}) async {
+  Future<void> _saveDraft(TaskDraft draft, {String? id}) =>
+      _commit(_prepareDraft(draft, id: id));
+
+  void Function() _prepareDraft(TaskDraft draft, {String? id}) {
     _checkLoaded();
     draft.validate();
     final taskId = id ?? newId();
@@ -572,12 +598,12 @@ class SyncEngine {
       changeSeq: old?.changeSeq ?? 0,
       updatedAt: DateTime.now().toUtc().toIso8601String(),
     );
-    await _commit(() {
+    return () {
       _tasks[taskId] = task;
       _removeUnsent(taskId);
       _operations.add(_operation(task, base, 'upsert'));
       _putTaskMetadata(taskId, draft);
-    });
+    };
   }
 
   Map<String, dynamic> _operation(Task task, int base, String action) => {

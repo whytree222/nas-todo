@@ -9,6 +9,8 @@ import '../sync_core.dart';
 import '../task_dates.dart';
 import '../task_tree.dart';
 import 'habits_screen.dart';
+import 'weekly_plan_screen.dart';
+import '../weekly_plan.dart';
 import 'task_repeat_options.dart';
 import 'personal_conflict_dialog.dart';
 import '../workbench_queries.dart';
@@ -39,7 +41,7 @@ class _HomeScreenState extends State<HomeScreen>
   bool _celebrationScheduled = false;
   bool _celebrationShowing = false;
   ModalRoute<dynamic>? _observedRoute;
-  static const _titles = ['全部待办', '今天', '已完成', '日历', '连接设置', '成就', '习惯'];
+  static const _titles = ['全部待办', '今天', '已完成', '日历', '连接设置', '成就', '习惯', '周待办'];
   DateTime? _calendarDate = DateTime.now();
   Future<void> _openWidget() async {
     try {
@@ -56,6 +58,47 @@ class _HomeScreenState extends State<HomeScreen>
       !_inlineEditing ||
       await (_inlineEditorKey.currentState?.confirmLeave() ??
           Future.value(true));
+  Future<void> _deleteList(String name) async {
+    if (!await _allowLeave() || !mounted) return;
+    final count = widget.controller.tasks
+        .where((t) => !t.deleted && t.listName == name)
+        .length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('删除分类“$name”？'),
+        content: Text('其中的 $count 条待办将移到收件箱，日期、完成状态、子任务与标签均保留。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除分类'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final ok = await widget.controller.deleteList(name);
+    if (!mounted) return;
+    if (ok) {
+      setState(() {
+        _inlineEditing = false;
+        _selectedTaskId = null;
+        if (_selectedList == name) {
+          _selectedList = null;
+          _page = 0;
+          _smartView = SmartTaskView.inbox;
+        }
+        if (_quickList == name) _quickList = null;
+      });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('分类已删除，待办已移到收件箱')));
+    }
+  }
+
   void _newTask() async {
     if (!await _allowLeave() || !mounted) {
       return;
@@ -521,7 +564,14 @@ class _HomeScreenState extends State<HomeScreen>
                                       .personalConflicts
                                       .isNotEmpty)
                                 _personalBanner(),
-                              if (_page == 6)
+                              if (_page == 7)
+                                Expanded(
+                                  child: WeeklyPlanScreen(
+                                    controller: widget.controller,
+                                    onEdit: _editTask,
+                                  ),
+                                )
+                              else if (_page == 6)
                                 Expanded(
                                   child: HabitsScreen(
                                     controller: widget.controller,
@@ -806,6 +856,12 @@ class _HomeScreenState extends State<HomeScreen>
             () => _selectPage(0),
           ),
           item(
+            Icons.view_week_outlined,
+            '周待办',
+            _page == 7,
+            () => _selectPage(7),
+          ),
+          item(
             Icons.calendar_month_outlined,
             '日历',
             _page == 3,
@@ -895,6 +951,13 @@ class _HomeScreenState extends State<HomeScreen>
               children: [
                 smart('收件箱', Icons.inbox_outlined, SmartTaskView.inbox),
                 smart('今天', Icons.wb_sunny_outlined, SmartTaskView.today),
+                _navItem(
+                  '周待办',
+                  Icons.view_week_outlined,
+                  _page == 7,
+                  null,
+                  () => choose(() => _selectPage(7)),
+                ),
                 smart(
                   '最近 7 天',
                   Icons.date_range_outlined,
@@ -921,7 +984,9 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   ),
                 ),
-                for (final list in _lists.where((name) => name != '收件箱'))
+                for (final list in _lists.where(
+                  (name) => name != '收件箱' && name != weeklyListName,
+                ))
                   _navItem(
                     list,
                     Icons.tag_rounded,
@@ -930,6 +995,7 @@ class _HomeScreenState extends State<HomeScreen>
                     () => choose(
                       () => _selectSmart(SmartTaskView.all, listName: list),
                     ),
+                    onDelete: () => choose(() => _deleteList(list)),
                   ),
                 if (widget.controller.tasks.any(
                   (task) => task.tags.isNotEmpty,
@@ -1002,8 +1068,9 @@ class _HomeScreenState extends State<HomeScreen>
     IconData icon,
     bool selected,
     int? count,
-    VoidCallback onTap,
-  ) {
+    VoidCallback onTap, {
+    VoidCallback? onDelete,
+  }) {
     final colors = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 3),
@@ -1043,6 +1110,17 @@ class _HomeScreenState extends State<HomeScreen>
                       fontSize: 11,
                       color: colors.onSurfaceVariant,
                     ),
+                  ),
+                if (onDelete != null)
+                  PopupMenuButton<String>(
+                    key: ValueKey('list-menu-$label'),
+                    tooltip: '分类操作',
+                    padding: EdgeInsets.zero,
+                    iconSize: 18,
+                    onSelected: (_) => onDelete(),
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(value: 'delete', child: Text('删除分类')),
+                    ],
                   ),
               ],
             ),
@@ -1091,6 +1169,14 @@ class _HomeScreenState extends State<HomeScreen>
               ],
             ),
           ),
+          if (_selectedList != null && _selectedList != '收件箱' && _taskPage)
+            IconButton(
+              tooltip: '删除分类',
+              onPressed: widget.controller.editing
+                  ? null
+                  : () => _deleteList(_selectedList!),
+              icon: const Icon(Icons.delete_outline_rounded),
+            ),
           if (wide && _taskPage || _page == 3)
             FilledButton.icon(
               onPressed: widget.controller.editing ? null : _newTask,

@@ -459,6 +459,8 @@ class AppController extends ChangeNotifier {
     return _edit(() => engine.deleteTask(id));
   }
 
+  Future<bool> deleteList(String name) => _edit(() => engine.deleteList(name));
+
   Future<bool> resolveConflict(String id, {required bool keepLocal}) async {
     return _edit(() => engine.resolveConflict(id, keepLocal: keepLocal));
   }

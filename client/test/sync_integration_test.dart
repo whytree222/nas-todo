@@ -880,4 +880,36 @@ void main() {
     expect(reopened.achievement!.version, 2);
     expect(reopened.habitAchievementPlans, isNotEmpty);
   });
+  test('Deleting categories and weekly scheduling converge on the existing NAS API', () async {
+    final a = await device('weekly-a'), b = await device('weekly-b');
+    await a.saveTask(
+      const TaskDraft(
+        title: '保留分类任务',
+        listName: '待删分类',
+        tags: ['保留标签'],
+        note: '保留备注',
+      ),
+    );
+    await a.saveTask(
+      const TaskDraft(title: '已完成也移动', listName: '待删分类', completed: true),
+    );
+    await a.sync();
+    await b.sync();
+    await a.deleteList('待删分类');
+    await a.sync();
+    await b.sync();
+    expect(b.tasks.every((t) => !t.deleted && t.listName == '收件箱'), isTrue);
+    expect(b.tasks.singleWhere((t) => t.title == '保留分类任务').tags, ['保留标签']);
+    expect(b.tasks.singleWhere((t) => t.title == '已完成也移动').completed, isTrue);
+    await a.saveTask(const TaskDraft(title: '本周目标', listName: '周待办'));
+    await a.sync();
+    await b.sync();
+    final task = b.tasks.singleWhere((t) => t.title == '本周目标');
+    final today = achievementToday().toIso8601String().substring(0, 10);
+    await b.setTaskPlacement(task.id, dueDate: today, requireIncomplete: true);
+    await b.sync();
+    await a.sync();
+    expect(a.tasks.singleWhere((t) => t.id == task.id).dueDate, today);
+    expect(a.tasks.singleWhere((t) => t.id == task.id).listName, '周待办');
+  });
 }
