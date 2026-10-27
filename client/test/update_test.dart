@@ -385,7 +385,7 @@ void main() {
       null,
       '../outside.dll',
       'unrelated.json',
-      'DATA/duplicate.dll',
+      'data/DUPLICATE.dll',
     ]) {
       final archive = Archive();
       for (final name in [
@@ -394,7 +394,7 @@ void main() {
         'flutter_windows.dll',
         'data/icudtl.dat',
         'data/duplicate.dll',
-        if (badName != null) badName,
+        ?badName,
       ]) {
         archive.addFile(ArchiveFile(name, 3, [1, 2, 3]));
       }

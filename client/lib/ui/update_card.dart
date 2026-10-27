@@ -85,10 +85,7 @@ class UpdateCard extends StatelessWidget {
         UpdateStatus.available => '发现新版本 ${manifest!.versionName}',
         UpdateStatus.downloading =>
           '正在下载 ${(updates.downloaded / manifest!.size * 100).round()}%',
-        UpdateStatus.ready =>
-          updates.info.platform == 'android'
-              ? '安装包已通过大小、SHA-256、版本与签名校验'
-              : '安装包已通过 SHA-256、路径、程序标识和版本校验',
+        UpdateStatus.ready => '更新已下载，可安装新版本',
         UpdateStatus.failed => '更新未完成',
       };
       return Column(
