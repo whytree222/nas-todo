@@ -2,6 +2,8 @@
 
 给绿联 DX4600 使用的个人待办项目：安卓和 Windows 原生客户端共用 Flutter 源码，Docker 同步服务和 SQLite 主数据库放在自己的 NAS 上。
 
+v0.13.0 的安卓与Windows应用内更新模块已实现，双端编译及自动测试通过；**正式签名APK与Release尚待签名Secrets配置后生成**。可在设置中检查、下载并确认安装；Windows包含独立文件替换与回滚程序。见[更新机制](docs/UPDATES.md)及[验证记录](docs/VALIDATION.md)。当前已发布安装包仍为下述v0.12.0。
+
 **[v0.12.0 分类管理与周待办测试版已发布](https://github.com/whytree222/nas-todo/releases/tag/v0.12.0)**。分类可以删除并将全部待办保留到收件箱；周待办支持待分配区、周一至周日排期、日期选择与拖放。两端静态分析、Flutter测试及原生构建通过。见 [安装说明](docs/RELEASE-v0.12.0.md) 与 [验证记录](docs/VALIDATION.md)。
 
 ## 可以做什么
