@@ -107,8 +107,9 @@ class UpdateController extends ChangeNotifier {
         manifest = candidate;
         if (candidate.versionCode <= info.versionCode ||
             !await _package.exists() ||
-            await _package.length() != candidate.size)
+            await _package.length() != candidate.size) {
           throw const FormatException();
+        }
         await native.verify(_package, candidate);
         status = UpdateStatus.ready;
       } catch (_) {
@@ -117,6 +118,19 @@ class UpdateController extends ChangeNotifier {
       }
     }
     await _cleanup();
+    if (info.platform == 'windows') {
+      try {
+        final result = await File('${info.directory.path}/update-result.txt')
+            .readAsString();
+        if (result.startsWith('failed:')) {
+          message = '上次更新未完成，旧程序文件已保留。请重试，或使用可写的程序目录。';
+        } else if (result.trim() == 'success ${info.versionName}') {
+          message = '已更新到 ${info.versionName}';
+        }
+      } catch (_) {
+        /* No previous installation result. */
+      }
+    }
   }
 
   Future<void> _cleanup() async {
@@ -124,12 +138,14 @@ class UpdateController extends ChangeNotifier {
     await for (final entry in info.directory.list(followLinks: false)) {
       if (entry is! File ||
           !RegExp(r'^nas-todo-\d+\.\d+\.\d+\.(apk|zip)(\.part)?$')
-              .hasMatch(entry.uri.pathSegments.last))
+              .hasMatch(entry.uri.pathSegments.last)) {
         continue;
+      }
       if (status == UpdateStatus.ready &&
           manifest != null &&
-          entry.path == _package.path)
+          entry.path == _package.path) {
         continue;
+      }
       try {
         await entry.delete();
       } catch (_) {
@@ -157,8 +173,9 @@ class UpdateController extends ChangeNotifier {
         !_allowed ||
         active ||
         status == UpdateStatus.ready ||
-        _disposed)
+        _disposed) {
       return;
+    }
     final now = _clock().millisecondsSinceEpoch;
     bool recent(String field, Duration period) {
       final value = _prefs[field];
@@ -169,8 +186,9 @@ class UpdateController extends ChangeNotifier {
 
     if (automatic &&
         (recent('success', const Duration(hours: 24)) ||
-            recent('failure', const Duration(hours: 1))))
+            recent('failure', const Duration(hours: 1)))) {
       return;
+    }
     final generation = ++_generation;
     status = UpdateStatus.checking;
     message = null;
@@ -220,8 +238,9 @@ class UpdateController extends ChangeNotifier {
         active ||
         _downloadPending ||
         status == UpdateStatus.ready ||
-        _disposed)
+        _disposed) {
       return;
+    }
     _downloadPending = true;
     final generation = ++_generation;
     status = UpdateStatus.downloading;
@@ -231,8 +250,9 @@ class UpdateController extends ChangeNotifier {
     final target = _package, partial = File('${_package.path}.part');
     try {
       if (await native.freeSpace() <
-          (candidate.size * (info.platform == 'windows' ? 8 : 1.2)).ceil())
+          (candidate.size * (info.platform == 'windows' ? 8 : 1.2)).ceil()) {
         throw const UpdateFailure('存储空间不足');
+      }
       if (!_current(generation)) return;
       var done = false;
       Object? failure;
@@ -280,8 +300,9 @@ class UpdateController extends ChangeNotifier {
     if (!_allowed ||
         status != UpdateStatus.ready ||
         manifest == null ||
-        _disposed)
+        _disposed) {
       return;
+    }
     try {
       // Recheck file size, hash and platform identity immediately before install.
       await native.verify(_package, manifest!);
@@ -322,8 +343,9 @@ class UpdateController extends ChangeNotifier {
   Future<void> openPage() async {
     final url = manifest?.pageUrl;
     if (url == null ||
-        !policy.initial(url, kind: 'page', platform: info.platform))
+        !policy.initial(url, kind: 'page', platform: info.platform)) {
       return;
+    }
     try {
       await native.openPage(url);
     } catch (_) {

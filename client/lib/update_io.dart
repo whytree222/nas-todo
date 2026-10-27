@@ -122,8 +122,9 @@ class HttpUpdates implements UpdateNetwork {
       kind: kind,
       platform: platform,
       cacheQuery: kind == 'manifest',
-    ))
+    )) {
       throw const UpdateFailure('更新地址不受信任');
+    }
     for (var redirect = 0; redirect <= 5; redirect++) {
       if (epoch != _epoch) throw const UpdateFailure('更新已取消');
       final request = await client
@@ -137,18 +138,21 @@ class HttpUpdates implements UpdateNetwork {
       );
       if (const [301, 302, 303, 307, 308].contains(response.statusCode)) {
         final location = response.headers.value(HttpHeaders.locationHeader);
-        if (redirect == 5 || location == null)
+        if (redirect == 5 || location == null) {
           throw const UpdateFailure('更新下载重定向无效');
+        }
         final next = uri.resolve(location);
-        if (!policy.redirect(next, kind: kind, platform: platform))
+        if (!policy.redirect(next, kind: kind, platform: platform)) {
           throw const UpdateFailure('更新下载地址不受信任');
+        }
         // Close this response without reading an unbounded redirect body.
         await response.listen((_) {}).cancel();
         uri = next;
         continue;
       }
-      if (response.statusCode != 200)
+      if (response.statusCode != 200) {
         throw const UpdateFailure('暂时无法获取更新，请稍后重试');
+      }
       return response;
     }
     throw const UpdateFailure('更新下载重定向过多');
@@ -165,8 +169,9 @@ class HttpUpdates implements UpdateNetwork {
       final bytes = <int>[];
       await for (final chunk in response.timeout(const Duration(seconds: 20))) {
         if (epoch != _epoch) throw const UpdateFailure('更新已取消');
-        if (bytes.length + chunk.length > 65536)
+        if (bytes.length + chunk.length > 65536) {
           throw const UpdateFailure('更新信息过大');
+        }
         bytes.addAll(chunk);
       }
       return utf8.decode(bytes);
@@ -202,8 +207,9 @@ class HttpUpdates implements UpdateNetwork {
         epoch,
       );
       if (response.contentLength >= 0 &&
-          response.contentLength != manifest.size)
+          response.contentLength != manifest.size) {
         throw const UpdateFailure('安装包大小与更新信息不符');
+      }
       file = target.openWrite();
       final result = _DigestSink();
       final digest = sha256.startChunkedConversion(result);
@@ -225,8 +231,9 @@ class HttpUpdates implements UpdateNetwork {
       await file.flush();
       if (epoch != _epoch) throw const UpdateFailure('更新已取消');
       if (written != manifest.size) throw const UpdateFailure('安装包下载不完整');
-      if (result.value.toString() != manifest.sha256)
+      if (result.value.toString() != manifest.sha256) {
         throw const UpdateFailure('SHA-256 校验失败，请重新下载');
+      }
       progress(written);
     } on UpdateFailure {
       rethrow;

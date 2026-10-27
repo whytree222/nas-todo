@@ -133,8 +133,9 @@ class _HomeScreenState extends State<HomeScreen>
     _quickFocus.addListener(_refreshQuickFocus);
     _scheduleCelebration();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && widget.controller.updates != null)
+      if (mounted && widget.controller.updates != null) {
         widget.controller.onResume();
+      }
     });
   }
 

@@ -12,8 +12,9 @@ bool safeBundlePath(String name) {
       name.startsWith('/') ||
       name.contains('\\') ||
       name.contains(':') ||
-      name.contains('\u0000'))
+      name.contains('\u0000')) {
     return false;
+  }
   final parts = name.split('/');
   if (parts.any(
     (p) =>
@@ -26,8 +27,9 @@ bool safeBundlePath(String name) {
           r'^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(\.|$)',
           caseSensitive: false,
         ).hasMatch(p),
-  ))
+  )) {
     return false;
+  }
   return parts.length == 1
       ? RegExp(
           r'^[A-Za-z0-9_.-]+\.(exe|dll|cmd)$',
@@ -39,8 +41,9 @@ bool safeBundlePath(String name) {
 Future<void> prepareWindowsBundle(File package, UpdateManifest manifest) async {
   if (await package.length() != manifest.size ||
       (await sha256.bind(package.openRead()).first).toString() !=
-          manifest.sha256)
+          manifest.sha256) {
     throw const UpdateFailure('SHA-256 校验失败，请重新下载');
+  }
   final stage = Directory('${package.path}.stage');
   // App-owned deterministic staging sibling; never use an archive-supplied root.
   if (await stage.exists()) await stage.delete(recursive: true);
@@ -58,11 +61,13 @@ Future<void> prepareWindowsBundle(File package, UpdateManifest manifest) async {
       final name = entry.name;
       if (entry.isSymbolicLink) throw const UpdateFailure('更新包包含不允许的链接');
       if (!entry.isFile) continue;
-      if (!safeBundlePath(name) || !names.add(name.toLowerCase()))
+      if (!safeBundlePath(name) || !names.add(name.toLowerCase())) {
         throw const UpdateFailure('更新包包含无效路径');
+      }
       total += entry.size;
-      if (entry.size < 0 || total > 512 * 1024 * 1024)
+      if (entry.size < 0 || total > 512 * 1024 * 1024) {
         throw const UpdateFailure('更新包展开大小超限');
+      }
       final content = entry.content;
       if (content.length != entry.size) throw const UpdateFailure('更新包文件大小无效');
       final file = File('${stage.path}/$name');
@@ -75,8 +80,9 @@ Future<void> prepareWindowsBundle(File package, UpdateManifest manifest) async {
       'nas_todo_updater.exe',
       'flutter_windows.dll',
       'data/icudtl.dat',
-    }))
+    })) {
       throw const UpdateFailure('Windows 更新包不完整');
+    }
     await File('${stage.path}/update-files.txt').writeAsString(
       'NAS_TODO_UPDATE_V1\n${manifest.versionName}\n${manifest.versionCode}\n${records.join('\n')}\n',
       encoding: utf8,

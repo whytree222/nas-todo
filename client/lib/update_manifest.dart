@@ -44,8 +44,9 @@ class UpdateUrls {
     if (cacheQuery &&
         u.hasQuery &&
         (u.queryParameters.length != 1 ||
-            !RegExp(r'^\d+$').hasMatch(u.queryParameters['t'] ?? '')))
+            !RegExp(r'^\d+$').hasMatch(u.queryParameters['t'] ?? ''))) {
       return false;
+    }
     final repo = u.host == 'github.com'
         ? updateGithubRepository
         : u.host == 'gitee.com' && _repo.hasMatch(giteeRepository)
@@ -53,16 +54,18 @@ class UpdateUrls {
         : null;
     if (repo == null) return false;
     final prefix = '/$repo/';
-    if (kind == 'manifest')
+    if (kind == 'manifest') {
       return u.path ==
               '${prefix}releases/latest/download/${platform == 'android' ? 'update.json' : 'update-windows.json'}' ||
           (u.host == 'gitee.com' &&
               u.path ==
                   '${prefix}raw/master/${platform == 'android' ? 'update.json' : 'update-windows.json'}');
-    if (kind == 'page')
+    }
+    if (kind == 'page') {
       return RegExp(
         '^${RegExp.escape(prefix)}releases/tag/v[0-9]+\\.[0-9]+\\.[0-9]+\$',
       ).hasMatch(u.path);
+    }
     final suffix = platform == 'android' ? 'apk' : 'zip';
     return RegExp(
       '^${RegExp.escape(prefix)}releases/download/v[0-9]+\\.[0-9]+\\.[0-9]+/nas-todo-[A-Za-z0-9_.-]+\\.$suffix\$',
@@ -76,15 +79,17 @@ class UpdateUrls {
         !u.hasQuery &&
         RegExp(
           '^/${RegExp.escape(updateGithubRepository)}/releases/download/v[0-9]+\\.[0-9]+\\.[0-9]+/update(-windows)?\\.json\$',
-        ).hasMatch(u.path))
+        ).hasMatch(u.path)) {
       return true;
-    if (u.host == 'github.com' || u.host == 'gitee.com')
+    }
+    if (u.host == 'github.com' || u.host == 'gitee.com') {
       return initial(
         u,
         kind: kind,
         platform: platform,
         cacheQuery: kind == 'manifest',
       );
+    }
     return const {
       'release-assets.githubusercontent.com',
       'objects.githubusercontent.com',
@@ -118,13 +123,15 @@ class UpdateManifest {
   }) {
     try {
       if (!const {'android', 'windows'}.contains(platform) ||
-          utf8.encode(raw).length > 65536)
+          utf8.encode(raw).length > 65536) {
         throw const FormatException();
+      }
       final value = jsonDecode(raw);
       if (value is! Map<String, dynamic> ||
           value['schema'] is! int ||
-          value['schema'] != 1)
+          value['schema'] != 1) {
         throw const FormatException();
+      }
       final code = value['versionCode'];
       final name = value['versionName'];
       final minimum = value['minSupportedVersionCode'] ?? code;
@@ -155,19 +162,22 @@ class UpdateManifest {
           urls is! List ||
           urls.isEmpty ||
           urls.length > 4 ||
-          urls.any((u) => u is! String))
+          urls.any((u) => u is! String)) {
         throw const FormatException();
+      }
       final parsed = urls.cast<String>().map(Uri.parse).toList();
       final page = Uri.parse(value['pageUrl'] as String);
       if (parsed.any(
             (u) => !policy.initial(u, kind: 'package', platform: platform),
           ) ||
-          !policy.initial(page, kind: 'page', platform: platform))
+          !policy.initial(page, kind: 'page', platform: platform)) {
         throw const FormatException();
+      }
       // A manifest cannot mix the version being advertised with another tag.
       if (parsed.any((u) => !u.path.contains('/download/v$name/')) ||
-          !page.path.endsWith('/v$name'))
+          !page.path.endsWith('/v$name')) {
         throw const FormatException();
+      }
       return UpdateManifest(
         versionCode: code,
         versionName: name,

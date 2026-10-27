@@ -13,8 +13,9 @@ Future<void> showAppUpdateDialog(
     builder: (context, _) {
       if (!updates.allowed) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (context.mounted && ModalRoute.of(context)?.isCurrent == true)
+          if (context.mounted && ModalRoute.of(context)?.isCurrent == true) {
             Navigator.pop(context);
+          }
         });
       }
       return PopScope(

@@ -43,8 +43,9 @@ class _Native implements UpdateNative {
     if (reject) throw const UpdateFailure('签名不符');
     if (await file.length() != manifest.size ||
         (await sha256.bind(file.openRead()).first).toString() !=
-            manifest.sha256)
+            manifest.sha256) {
       throw const UpdateFailure('哈希不符');
+    }
   }
 
   @override
@@ -353,7 +354,7 @@ void main() {
       tester.view.physicalSize = const Size(320, 568);
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPhysicalSize);
-      await updates.check();
+      await tester.runAsync(() => updates.check());
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -368,14 +369,29 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('发现新版本 0.13.1'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('update-download')));
+      await tester.runAsync(() async {
+        await tester.tap(find.byKey(const ValueKey('update-download')));
+        for (
+          var i = 0;
+          i < 200 && updates.status == UpdateStatus.downloading;
+          i++
+        ) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+      expect(updates.status, UpdateStatus.ready);
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.byKey(const ValueKey('update-install')));
       await tester.tap(find.byKey(const ValueKey('update-install')));
       await tester.pumpAndSettle();
       expect(find.text('安装更新？'), findsOneWidget);
       expect(native.installs, 0);
-      await tester.tap(find.text('继续安装'));
+      await tester.runAsync(() async {
+        await tester.tap(find.text('继续安装'));
+        for (var i = 0; i < 200 && native.installs == 0; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
       await tester.pumpAndSettle();
       expect(native.installs, 1);
       expect(tester.takeException(), isNull);
