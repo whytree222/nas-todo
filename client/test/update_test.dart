@@ -34,6 +34,7 @@ class _Native implements UpdateNative {
   int installs = 0, verifies = 0;
   int space = 10000000;
   String installResult = 'started';
+  Completer<void>? installGate;
   @override
   Future<UpdateIdentity> identity() async => info;
   @override
@@ -46,7 +47,7 @@ class _Native implements UpdateNative {
       return;
     }
     if (await file.length() != manifest.size ||
-        (await sha256.bind(file.openRead()).first).toString() !=
+        (await sha256.bind(file.openRead()).last).toString() !=
             manifest.sha256) {
       throw const UpdateFailure('哈希不符');
     }
@@ -55,6 +56,7 @@ class _Native implements UpdateNative {
   @override
   Future<String> install(File file, UpdateManifest manifest) async {
     installs++;
+    if (installGate != null) await installGate!.future;
     return installResult;
   }
 
@@ -255,6 +257,7 @@ void main() {
     await updates.initialize();
   });
   tearDown(() async {
+    await updates.flush();
     updates.dispose();
     if (await root.exists()) await root.delete(recursive: true);
   });
@@ -319,6 +322,26 @@ void main() {
       expect(native.installs, 0);
     },
   );
+  test(
+    'Repeated installation requests cannot start concurrent installers',
+    () async {
+      await updates.check();
+      await updates.download();
+      native.installGate = Completer<void>();
+      final first = updates.install();
+      expect(updates.installing, isTrue);
+      await updates.install();
+      while (native.installs == 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      expect(native.installs, 1);
+      updates.cancel();
+      expect(updates.status, UpdateStatus.ready);
+      native.installGate!.complete();
+      await first;
+      expect(updates.installing, isFalse);
+    },
+  );
   test('A background transition cancels partial writes without leaving a Ready package', () async {
     await updates.check();
     network.gate = Completer<void>();
@@ -375,11 +398,7 @@ void main() {
       expect(find.text('发现新版本 0.13.1'), findsOneWidget);
       await tester.runAsync(() async {
         await tester.tap(find.byKey(const ValueKey('update-download')));
-        for (
-          var i = 0;
-          i < 200 && updates.status == UpdateStatus.downloading;
-          i++
-        ) {
+        for (var i = 0; i < 200 && updates.active; i++) {
           await Future<void>.delayed(const Duration(milliseconds: 10));
         }
       });

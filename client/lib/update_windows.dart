@@ -40,7 +40,7 @@ bool safeBundlePath(String name) {
 
 Future<void> prepareWindowsBundle(File package, UpdateManifest manifest) async {
   if (await package.length() != manifest.size ||
-      (await sha256.bind(package.openRead()).first).toString() !=
+      (await sha256.bind(package.openRead()).last).toString() !=
           manifest.sha256) {
     throw const UpdateFailure('SHA-256 校验失败，请重新下载');
   }

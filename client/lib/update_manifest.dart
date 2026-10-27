@@ -76,7 +76,9 @@ class UpdateUrls {
     if (!_base(u)) return false;
     if (kind == 'manifest' &&
         u.host == 'github.com' &&
-        !u.hasQuery &&
+        (!u.hasQuery ||
+            (u.queryParameters.length == 1 &&
+                RegExp(r'^\d+$').hasMatch(u.queryParameters['t'] ?? ''))) &&
         RegExp(
           '^/${RegExp.escape(updateGithubRepository)}/releases/download/v[0-9]+\\.[0-9]+\\.[0-9]+/update(-windows)?\\.json\$',
         ).hasMatch(u.path)) {

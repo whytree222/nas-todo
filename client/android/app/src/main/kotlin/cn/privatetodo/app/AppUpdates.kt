@@ -28,7 +28,7 @@ class AppUpdates(private val activity: FlutterActivity, messenger: BinaryMesseng
                         val installed = installed()
                         result.success(mapOf("platform" to "android", "versionName" to installed.versionName,
                             "versionCode" to code(installed), "directory" to directory.path,
-                            "enabled" to !BuildConfig.DEBUG && BuildConfig.UPDATES_ENABLED))
+                            "enabled" to (!BuildConfig.DEBUG && BuildConfig.UPDATES_ENABLED)))
                     }
                     "freeSpace" -> result.success(StatFs(directory.path).availableBytes)
                     "verify", "install" -> {

@@ -23,7 +23,10 @@ Future<void> showAppUpdateDialog(
         child: AlertDialog(
           title: const Text('应用更新'),
           scrollable: true,
-          content: SizedBox(width: 480, child: UpdateCard(updates: updates)),
+          content: SizedBox(
+            width: 480,
+            child: UpdateCard(updates: updates, fullNotes: true),
+          ),
           actions: [
             TextButton(
               onPressed: updates.status == UpdateStatus.downloading
@@ -39,8 +42,9 @@ Future<void> showAppUpdateDialog(
 );
 
 class UpdateCard extends StatelessWidget {
-  const UpdateCard({super.key, required this.updates});
+  const UpdateCard({super.key, required this.updates, this.fullNotes = false});
   final UpdateController updates;
+  final bool fullNotes;
   Future<void> _install(BuildContext context) async {
     final windows = updates.info.platform == 'windows';
     final agreed = await showDialog<bool>(
@@ -108,7 +112,10 @@ class UpdateCard extends StatelessWidget {
             style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
           ),
           const SizedBox(height: 12),
-          Text(status, key: const ValueKey('update-status')),
+          Text(
+            updates.installing ? '正在准备安装…' : status,
+            key: const ValueKey('update-status'),
+          ),
           if (!updates.allowed)
             const Padding(
               padding: EdgeInsets.only(top: 8),
@@ -125,7 +132,13 @@ class UpdateCard extends StatelessWidget {
             if (manifest.notes.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(manifest.notes),
+                child: Text(
+                  manifest.notes,
+                  maxLines: fullNotes ? null : 6,
+                  overflow: fullNotes
+                      ? TextOverflow.visible
+                      : TextOverflow.ellipsis,
+                ),
               ),
           ],
           if (updates.status == UpdateStatus.downloading)
@@ -175,7 +188,10 @@ class UpdateCard extends StatelessWidget {
               if (updates.status == UpdateStatus.ready)
                 FilledButton(
                   key: const ValueKey('update-install'),
-                  onPressed: updates.allowed ? () => _install(context) : null,
+                  onPressed:
+                      updates.allowed && !updates.active && !updates.installing
+                      ? () => _install(context)
+                      : null,
                   child: const Text('安装更新'),
                 ),
               if (updates.hasUpdate && !updates.active)
@@ -184,6 +200,11 @@ class UpdateCard extends StatelessWidget {
                 TextButton(
                   onPressed: updates.openPage,
                   child: const Text('发布页'),
+                ),
+              if (!fullNotes && manifest != null && !updates.active)
+                TextButton(
+                  onPressed: () => showAppUpdateDialog(context, updates),
+                  child: const Text('查看完整说明'),
                 ),
             ],
           ),

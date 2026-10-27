@@ -40,13 +40,18 @@ class UpdateController extends ChangeNotifier {
   int downloaded = 0;
   bool _allowed = true, _disposed = false;
   bool _downloadPending = false;
+  bool _installing = false;
   bool _notificationQueued = false;
   int _generation = 0;
   Map<String, dynamic> _prefs = {};
   Future<void> _writes = Future.value();
   bool get allowed => _allowed;
+  bool get installing => _installing;
   bool get active =>
-      status == UpdateStatus.checking || status == UpdateStatus.downloading;
+      status == UpdateStatus.checking ||
+      status == UpdateStatus.downloading ||
+      _downloadPending;
+  Future<void> flush() => _writes;
   bool get _snoozed =>
       manifest != null &&
       _prefs['snoozeCode'] == manifest!.versionCode &&
@@ -162,7 +167,7 @@ class UpdateController extends ChangeNotifier {
   }
 
   Future<void> resume() async {
-    if (!info.enabled || _disposed) return;
+    if (!info.enabled || _disposed || _installing) return;
     if (!active) await _cleanup();
     _notify();
     await check(automatic: true);
@@ -172,6 +177,7 @@ class UpdateController extends ChangeNotifier {
     if (!info.enabled ||
         !_allowed ||
         active ||
+        _installing ||
         status == UpdateStatus.ready ||
         _disposed) {
       return;
@@ -236,6 +242,7 @@ class UpdateController extends ChangeNotifier {
     if (!_allowed ||
         candidate == null ||
         active ||
+        _installing ||
         _downloadPending ||
         status == UpdateStatus.ready ||
         _disposed) {
@@ -298,39 +305,50 @@ class UpdateController extends ChangeNotifier {
 
   Future<void> install() async {
     if (!_allowed ||
+        active ||
+        _installing ||
         status != UpdateStatus.ready ||
         manifest == null ||
         _disposed) {
       return;
     }
-    try {
-      // Recheck file size, hash and platform identity immediately before install.
-      await native.verify(_package, manifest!);
-    } catch (e) {
-      if (await _package.exists()) await _package.delete();
-      _prefs.remove('ready');
-      await _persist();
-      status = UpdateStatus.failed;
-      message = _message(e);
-      _notify();
-      return;
-    }
-    try {
-      if (!_allowed || _disposed) return;
-      final result = await native.install(_package, manifest!);
-      message = result == 'permission'
-          ? '请允许此应用安装更新，返回后再点“安装更新”。'
-          : info.platform == 'android'
-          ? '请在系统安装器中确认覆盖安装。'
-          : '正在退出主程序和组件并更新，完成后自动启动。';
-    } catch (e) {
-      message = _message(e);
-    }
+    _installing = true;
     _notify();
+    var windowsStarted = false;
+    try {
+      try {
+        // Recheck file size, hash and platform identity immediately before install.
+        await _writes;
+        await native.verify(_package, manifest!);
+      } catch (e) {
+        if (await _package.exists()) await _package.delete();
+        _prefs.remove('ready');
+        await _persist();
+        status = UpdateStatus.failed;
+        message = _message(e);
+        return;
+      }
+      try {
+        if (!_allowed || _disposed) return;
+        final result = await native.install(_package, manifest!);
+        windowsStarted = info.platform == 'windows' && result == 'started';
+        message = result == 'permission'
+            ? '请允许此应用安装更新，返回后再点“安装更新”。'
+            : info.platform == 'android'
+            ? '请在系统安装器中确认覆盖安装。'
+            : '正在退出主程序和组件并更新，完成后自动启动。';
+      } catch (e) {
+        message = _message(e);
+      }
+    } finally {
+      // The Windows helper owns shutdown once its handshake succeeds.
+      _installing = windowsStarted;
+      _notify();
+    }
   }
 
   Future<void> later() async {
-    if (active || manifest == null) return;
+    if (active || _installing || manifest == null) return;
     _prefs['snoozeCode'] = manifest!.versionCode;
     _prefs['snoozeUntil'] = _clock()
         .add(const Duration(hours: 24))
@@ -355,6 +373,7 @@ class UpdateController extends ChangeNotifier {
   }
 
   void cancel() {
+    if (_installing) return;
     ++_generation;
     network.cancel();
     status = manifest == null ? UpdateStatus.idle : UpdateStatus.available;

@@ -505,7 +505,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<bool> _edit(Future<void> Function() operation) async {
-    if (_disposed || _editing) {
+    if (_disposed || _editing || updates?.installing == true) {
       return false;
     }
     _editing = true;
@@ -538,7 +538,10 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> sync() async {
-    if (_disposed || busy || updates?.active == true) {
+    if (_disposed ||
+        busy ||
+        updates?.active == true ||
+        updates?.installing == true) {
       return;
     }
     if (!isConfigured) {
