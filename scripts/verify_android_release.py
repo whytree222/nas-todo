@@ -7,15 +7,25 @@ import re
 import subprocess
 
 def verify_signing_output(output, expected):
-    # v3.1 prints SDK-range signers rather than the older "Signer #1" label.
+    # New SDKs label signers by signature scheme; v3.1 may use SDK ranges.
     counts = re.findall(r'^Number of signers:\s*(\d+)\s*$', output, re.M)
     lines = [line.strip() for line in output.splitlines()
-             if line.startswith('Signer ') and 'certificate SHA-256 digest:' in line]
+             if 'certificate SHA-256 digest:' in line and not line.startswith('Source Stamp Signer')]
     label = r'(?:#1|\(minSdkVersion=\d+(?: \(dev release=true\))?, maxSdkVersion=\d+\))'
-    pattern = re.compile(r'Signer ' + label + r' certificate SHA-256 digest:\s*([0-9a-fA-F]{64})')
-    matches = [pattern.fullmatch(line) for line in lines]
-    assert counts == ['1'] and lines and all(matches), 'Release must have one recognized APK signer'
-    certificates = {match.group(1).lower() for match in matches}
+    legacy = re.compile(r'Signer ' + label + r' certificate SHA-256 digest:\s*([0-9a-fA-F]{64})')
+    scheme = re.compile(r'(V(?:1|2|3(?:\.[01])?|4)) Signer: certificate SHA-256 digest:\s*([0-9a-fA-F]{64})')
+    assert lines and (not counts or counts == ['1']), 'Release must have one APK signer'
+    certificates, schemes = set(), set()
+    for line in lines:
+        match = legacy.fullmatch(line)
+        if match:
+            assert counts == ['1'], 'Legacy signer count is missing'
+            certificates.add(match.group(1).lower())
+            continue
+        match = scheme.fullmatch(line)
+        assert match and match.group(1) not in schemes, 'Unrecognized or multiple APK signers'
+        schemes.add(match.group(1))
+        certificates.add(match.group(2).lower())
     assert certificates == {expected}, 'Release signing certificate mismatch'
 
 def main():

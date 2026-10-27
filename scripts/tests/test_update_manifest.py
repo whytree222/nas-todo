@@ -19,6 +19,17 @@ class SigningCertificateTests(unittest.TestCase):
                   'Signer (minSdkVersion=33, maxSdkVersion=2147483647) certificate SHA-256 digest: ' + self.fingerprint)
         verify_signing_output(output, self.fingerprint)
 
+    def test_build_tools_37_scheme_labels_require_one_signer_per_scheme(self):
+        v2 = 'V2 Signer: certificate SHA-256 digest: ' + self.fingerprint
+        v3 = 'V3.0 Signer: certificate SHA-256 digest: ' + self.fingerprint
+        verify_signing_output(v2, self.fingerprint)
+        verify_signing_output(v2 + '\n' + v3, self.fingerprint)
+        for output in [v2 + '\n' + v2, 'Number of signers: 2\n' + v2,
+                       v2 + '\nV3.0 Signer: certificate SHA-256 digest: ' + 'b' * 64,
+                       'V2 Signer #2: certificate SHA-256 digest: ' + self.fingerprint]:
+            with self.assertRaises(AssertionError):
+                verify_signing_output(output, self.fingerprint)
+
     def test_unrecognized_wrong_rotated_or_multiple_signers_are_rejected(self):
         for output in [
             'Number of signers: 1\nSigner #1 certificate SHA-256 digest: ' + 'b' * 64,
