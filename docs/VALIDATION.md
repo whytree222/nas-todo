@@ -1,5 +1,6 @@
 # v0.13.0 正式发布与应用内更新验证
 
+- [公开下载复核40477981497](https://github.com/whytree222/nas-todo/actions/runs/40477981497)成功：从两条latest地址获取清单，实际下载全部7项发布文件，逐项核对大小与SHA256、校验和列表及APK/Windows/服务端ZIP完整性。两份在线清单也由本机的实际应用解析器接受。本机下载Windows文件时遇到TLS网络中断，因此全量下载复核在云端完成。
 - 客户端验证源码：`bddd6860c13589c0d2d7586b16a86b74a73f071a`；[签名构建40461782486](https://github.com/whytree222/nas-todo/actions/runs/40461782486)成功。Android 201项Flutter测试通过、1项平台跳过；Windows 202项通过；两端静态分析及原生构建通过，后端45项、构建时7项发布脚本检查通过。
 - Android固定发布签名APK已生成，apksigner核对实际证书与`client/android/release-cert.sha256`完全一致，包名`cn.privatetodo.app`、版本`0.13.0+17`、大小与哈希校验通过。Android 15模拟器12项原生检查通过，覆盖已有滑动组件、应用/版本/签名核对、私有文件和FileProvider范围。
 - Windows实际PE产品/版本、完整目录、独立更新器自检通过；更新器复制到临时目录执行，覆盖SHA256、安全路径、文件占用失败回滚和无关文件保留。原有毛玻璃、贴边隐藏及独立组件生命周期检查继续通过。
