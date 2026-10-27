@@ -2,9 +2,9 @@
 
 给绿联 DX4600 使用的个人待办项目：安卓和 Windows 原生客户端共用 Flutter 源码，Docker 同步服务和 SQLite 主数据库放在自己的 NAS 上。
 
-v0.13.0 的安卓与Windows应用内更新模块已实现，双端编译及自动测试通过；**正式签名APK与Release尚待签名Secrets配置后生成**。可在设置中检查、下载并确认安装；Windows包含独立文件替换与回滚程序。见[更新机制](docs/UPDATES.md)及[验证记录](docs/VALIDATION.md)。当前已发布安装包仍为下述v0.12.0。
+**[v0.13.0 应用内更新正式版已发布](https://github.com/whytree222/nas-todo/releases/tag/v0.13.0)**。安卓与Windows都可在设置中检查、下载并确认安装更新；安卓从本版起沿用固定发布签名，Windows包含独立替换与回滚程序。见[首次安装说明](docs/RELEASE-v0.13.0.md)、[更新机制](docs/UPDATES.md)及[验证记录](docs/VALIDATION.md)。
 
-**[v0.12.0 分类管理与周待办测试版已发布](https://github.com/whytree222/nas-todo/releases/tag/v0.12.0)**。分类可以删除并将全部待办保留到收件箱；周待办支持待分配区、周一至周日排期、日期选择与拖放。两端静态分析、Flutter测试及原生构建通过。见 [安装说明](docs/RELEASE-v0.12.0.md) 与 [验证记录](docs/VALIDATION.md)。
+旧版没有更新模块，需要手动安装本版一次。安卓若提示签名不兼容，先完成NAS同步和备份，再处理迁移；不要直接卸载含离线修改的旧版。Windows解压完整ZIP，保留更新程序、DLL和data资源。
 
 ## 可以做什么
 
@@ -22,7 +22,7 @@ v0.13.0 的安卓与Windows应用内更新模块已实现，双端编译及自�
 - 成就每周分别考核待办完成率、习惯达标率，两个非空类别均≥80%才得星。每个习惯的每个计划日计1天，达到当天次数目标才达标；休息日不参与，实时分母不提前计未来习惯日。
 - 黑白绿蓝主题、今日鼓励、安卓五种滑动组件、Windows独立毛玻璃与贴边隐藏、离线保存、NAS同步及冲突选择继续保留。
 
-v0.12.0 仅更新客户端，已使用 v0.11.0 成就服务的 NAS 无需重新部署。尚未升级习惯成就服务时，先同步并停止原项目，备份整份data；在原compose中只替换todo-sync的整个command段，保留密钥、端口、用户和挂载，无需init。command-block.yaml不是完整compose，不能直接覆盖原文件。详见 [升级说明](docs/UPGRADE-v0.11.0.md)。已有习惯从NAS新规则启用当天开始计计划日，历史已结算成就不回算，习惯与打卡历史不参加待办月底清理。
+v0.13.0 沿用现有服务，已使用 v0.11.0 成就服务的 NAS 无需重新部署。尚未升级习惯成就服务时，先同步并停止原项目，备份整份data；在原compose中只替换todo-sync的整个command段，保留密钥、端口、用户和挂载，无需init。command-block.yaml不是完整compose，不能直接覆盖原文件。详见 [升级说明](docs/UPGRADE-v0.11.0.md)。已有习惯从NAS新规则启用当天开始计计划日，历史已结算成就不回算，习惯与打卡历史不参加待办月底清理。
 
 本版依据使用者提供的静态前端报告组织界面，使用独立实现的组件和图标；保留现有功能，不添加时间线、番茄钟、附件、AI或协作模块。
 
@@ -41,7 +41,7 @@ NAS、安卓和 Windows 已经加入同一个 ZeroTier 网络，直接沿用现�
 ## 从这里开始
 
 1. 按 [DX4600 部署说明](docs/DEPLOY-DX4600.md) 把同步服务装到 NAS，生成自己的访问令牌。
-2. 从 [Release](https://github.com/whytree222/nas-todo/releases/tag/v0.11.0) 下载安卓APK和完整WindowsZIP，并按 [习惯成就升级说明](docs/UPGRADE-v0.11.0.md) 更新原NAS项目。
+2. 从 [Release](https://github.com/whytree222/nas-todo/releases/tag/v0.13.0) 下载安卓APK和完整WindowsZIP；仅在服务早于v0.11.0时按 [习惯成就升级说明](docs/UPGRADE-v0.11.0.md) 更新原NAS项目。
 3. 在两台设备的“连接设置”中填写同一 NAS 地址和同一访问令牌。
 4. 用 NAS 的 ZeroTier IP 验证 `/health` 和同步，再让手机切到移动网络测试；最后验证断网修改和双端冲突。
 
@@ -68,6 +68,7 @@ NAS、安卓和 Windows 已经加入同一个 ZeroTier 网络，直接沿用现�
 | `.github/workflows/publish-v091.yml` | 发布通过已有分组选择检查的 v0.9.1 安装包 |
 | `.github/workflows/publish-v010.yml` | 发布已验证的 v0.10.0 个人工作台与匹配 NAS 源码包 |
 | `.github/workflows/publish-v011.yml` | 发布已验证的v0.11.0客户端和不含密钥的NAS程序升级片段 |
+| `.github/workflows/publish-v013.yml` | 发布固定签名APK、完整Windows程序与两份稳定更新清单 |
 | `docs/` | 部署、备份、恢复和客户端构建说明 |
 
 使用者已授权公开源码和安装包。构建40047037467全部成功，v0.11.0公开发布；原NAS密钥不在本地，使用者已明确同意按源码差异和敏感信息审计发布。源码包排除.env、数据库、备份和签名材料。

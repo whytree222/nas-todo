@@ -1,8 +1,10 @@
-> 最新版本：[v0.12.0](https://github.com/whytree222/nas-todo/releases/tag/v0.12.0)。本次只需更新客户端；v0.11.0 NAS 服务可继续使用。
+> 最新版本：[v0.13.0](https://github.com/whytree222/nas-todo/releases/tag/v0.13.0)。本次只需更新客户端；v0.11.0 NAS 服务可继续使用。
 
 # 构建安卓与 Windows 客户端
 
 本工程提供独立应用源码。NAS 的 Docker 服务与客户端构建是两个步骤：Docker 不会直接生成 APK 或 Windows 程序。
+
+正式安装包使用固定发布签名；GitHub构建配置四项Actions Secrets后生成并核对release APK。下方debug命令仅用于开发测试，首次签名迁移与更新说明见[UPDATES.md](UPDATES.md)。
 
 ## 环境准备
 
