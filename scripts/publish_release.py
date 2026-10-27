@@ -154,8 +154,12 @@ def main():
     windows_output = dist / f'nas-todo-windows-{TAG}-x64.zip'
     with zipfile.ZipFile(windows_output, 'w', zipfile.ZIP_DEFLATED) as archive:
         for file in sorted(windows.rglob('*')):
-            if file.is_file() and file.suffix.lower() not in {'.lib', '.exp'} and not file.name.endswith('.identity.json'):
-                archive.write(file, file.relative_to(windows).as_posix())
+            if file.is_file() and file.suffix.lower() not in {'.lib', '.exp', '.pdb'} and not file.name.endswith('.identity.json'):
+                relative = file.relative_to(windows).as_posix()
+                if modern:
+                    check(relative.startswith('data/') or re.fullmatch(r'[A-Za-z0-9_.-]+\.(exe|dll|cmd)', relative, re.I),
+                          'Unexpected file in Windows update bundle: ' + relative)
+                archive.write(file, relative)
     with zipfile.ZipFile(windows_output) as archive:
         check(archive.testzip() is None, 'Windows ZIP integrity failed')
         check('nas_todo.exe' in archive.namelist(), 'Windows EXE not at archive root')

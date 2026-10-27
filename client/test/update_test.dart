@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:crypto/crypto.dart';
+import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -379,6 +380,51 @@ void main() {
       expect(native.installs, 0);
     },
   );
+  test('Windows ZIP extraction creates a checked inventory and rejects unsafe entries', () async {
+    for (final badName in [
+      null,
+      '../outside.dll',
+      'unrelated.json',
+      'DATA/duplicate.dll',
+    ]) {
+      final archive = Archive();
+      for (final name in [
+        'nas_todo.exe',
+        'nas_todo_updater.exe',
+        'flutter_windows.dll',
+        'data/icudtl.dat',
+        'data/duplicate.dll',
+        if (badName != null) badName,
+      ]) {
+        archive.addFile(ArchiveFile(name, 3, [1, 2, 3]));
+      }
+      final bytes = ZipEncoder().encode(archive);
+      final package = File('${native.info.directory.path}/nas-todo-0.13.1.zip');
+      await package.writeAsBytes(bytes, flush: true);
+      final manifest = UpdateManifest.parse(
+        jsonEncode({
+          ..._json(platform: 'windows'),
+          'size': bytes.length,
+          'sha256': sha256.convert(bytes).toString(),
+        }),
+        platform: 'windows',
+      );
+      if (badName == null) {
+        await prepareWindowsBundle(package, manifest);
+        final inventory = await File('${package.path}.stage/update-files.txt')
+            .readAsString();
+        expect(inventory, contains('NAS_TODO_UPDATE_V1\n0.13.1\n18\n'));
+        expect(inventory, contains(' data/icudtl.dat'));
+      } else {
+        await expectLater(
+          prepareWindowsBundle(package, manifest),
+          throwsA(isA<UpdateFailure>()),
+        );
+        expect(await Directory('${package.path}.stage').exists(), isFalse);
+        expect(await File('${root.path}/outside.dll').exists(), isFalse);
+      }
+    }
+  });
   testWidgets(
     'Narrow update UI shows notes, download and explicit system installation confirmation',
     (tester) async {
@@ -415,14 +461,21 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('安装更新？'), findsOneWidget);
       expect(native.installs, 0);
-      await tester.runAsync(() async {
-        await tester.tap(find.text('继续安装'));
-        for (var i = 0; i < 200 && native.installs == 0; i++) {
-          await Future<void>.delayed(const Duration(milliseconds: 10));
-        }
-      });
+      await tester.tap(find.text('继续安装'));
+      // Drive both the dialog's fake clock and the real file-write future.
+      for (var i = 0; i < 100 && native.installs == 0; i++) {
+        await tester.pump();
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+      }
       await tester.pumpAndSettle();
-      expect(native.installs, 1);
+      expect(
+        native.installs,
+        1,
+        reason:
+            '${updates.status} / ${updates.message} / installing=${updates.installing}',
+      );
       expect(tester.takeException(), isNull);
     },
   );
