@@ -247,7 +247,9 @@ jobs:
         run: python ../scripts/verify_windows_release.py --exe build/windows/x64/runner/Release/nas_todo.exe
       - name: Test transactional Windows updater
         run: |
-          $updateTest = Start-Process -FilePath "$PWD/build/windows/x64/runner/Release/nas_todo_updater.exe" -ArgumentList '--self-test' -Wait -PassThru -WindowStyle Hidden
+          $helperTest = Join-Path $env:RUNNER_TEMP 'nas-todo-updater-self-test.exe'
+          Copy-Item -LiteralPath "$PWD/build/windows/x64/runner/Release/nas_todo_updater.exe" -Destination $helperTest
+          $updateTest = Start-Process -FilePath $helperTest -WorkingDirectory $env:RUNNER_TEMP -ArgumentList '--self-test' -Wait -PassThru -WindowStyle Hidden
           if ($updateTest.ExitCode -ne 0) { throw "Windows updater validation failed: $($updateTest.ExitCode)" }
           Write-Output 'Windows updater checks passed: SHA256, safe paths, locked-file rollback and unrelated-file preservation'
       - name: Test native glass desktop widget

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.15)
 project(runner LANGUAGES CXX)
 
 # Define the application target. To change its name, change BINARY_NAME in the
@@ -41,11 +41,13 @@ target_compile_options(update_files PRIVATE /utf-8)
 target_compile_definitions(update_files PRIVATE NOMINMAX)
 target_link_libraries(update_files PUBLIC bcrypt.lib version.lib shell32.lib ole32.lib)
 target_link_libraries(${BINARY_NAME} PRIVATE update_files)
-add_executable(nas_todo_updater WIN32 "updater_main.cpp")
+add_executable(nas_todo_updater WIN32 "updater_main.cpp" "update_files.cpp")
 apply_standard_settings(nas_todo_updater)
+# The helper runs from AppData, away from the bundle's VC runtime DLLs.
+set_property(TARGET nas_todo_updater PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 target_compile_options(nas_todo_updater PRIVATE /utf-8)
 target_compile_definitions(nas_todo_updater PRIVATE NOMINMAX)
-target_link_libraries(nas_todo_updater PRIVATE update_files)
+target_link_libraries(nas_todo_updater PRIVATE bcrypt.lib version.lib shell32.lib ole32.lib)
 add_dependencies(${BINARY_NAME} nas_todo_updater)
 target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib" "gdi32.lib" "advapi32.lib")
 
