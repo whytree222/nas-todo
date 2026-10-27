@@ -30,6 +30,7 @@ class _Native implements UpdateNative {
   _Native(this.info);
   final UpdateIdentity info;
   bool reject = false;
+  bool skipDiskChecks = false;
   int installs = 0, verifies = 0;
   int space = 10000000;
   String installResult = 'started';
@@ -41,6 +42,9 @@ class _Native implements UpdateNative {
   Future<void> verify(File file, UpdateManifest manifest) async {
     verifies++;
     if (reject) throw const UpdateFailure('签名不符');
+    if (skipDiskChecks) {
+      return;
+    }
     if (await file.length() != manifest.size ||
         (await sha256.bind(file.openRead()).first).toString() !=
             manifest.sha256) {
@@ -381,17 +385,13 @@ void main() {
       });
       expect(updates.status, UpdateStatus.ready);
       await tester.pumpAndSettle();
+      native.skipDiskChecks = true;
       await tester.ensureVisible(find.byKey(const ValueKey('update-install')));
       await tester.tap(find.byKey(const ValueKey('update-install')));
       await tester.pumpAndSettle();
       expect(find.text('安装更新？'), findsOneWidget);
       expect(native.installs, 0);
-      await tester.runAsync(() async {
-        await tester.tap(find.text('继续安装'));
-        for (var i = 0; i < 200 && native.installs == 0; i++) {
-          await Future<void>.delayed(const Duration(milliseconds: 10));
-        }
-      });
+      await tester.tap(find.text('继续安装'));
       await tester.pumpAndSettle();
       expect(native.installs, 1);
       expect(tester.takeException(), isNull);

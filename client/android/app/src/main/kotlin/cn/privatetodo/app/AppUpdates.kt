@@ -91,9 +91,12 @@ class AppUpdates(private val activity: FlutterActivity, messenger: BinaryMesseng
         if (digest.digest().joinToString("") { "%02x".format(it) } != hash) throw UpdateError("hash")
         @Suppress("DEPRECATION")
         val archive = activity.packageManager.getPackageArchiveInfo(file.path, flags()) ?: throw UpdateError("identity")
+        verifyIdentity(archive, name, version)
+        return file
+    }
+    fun verifyIdentity(archive: PackageInfo, name: String, version: Long) {
         if (archive.packageName != activity.packageName || archive.versionName != name || code(archive) != version) throw UpdateError("identity")
         if (!MessageDigest.isEqual(signer(archive), signer(installed()))) throw UpdateError("signature")
-        return file
     }
     private fun install(file: File, version: Long): String {
         if (BuildConfig.DEBUG || !BuildConfig.UPDATES_ENABLED || version <= code(installed())) throw UpdateError("identity")

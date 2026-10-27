@@ -37,6 +37,8 @@ jobs:
           python-version: '3.12'
       - name: Backend HTTP and SQLite tests
         run: python -B -m unittest discover -s server/tests -v
+      - name: Release manifest tests
+        run: python -B -m unittest discover -s scripts/tests -v
       - name: Report backend result
         if: always()
         uses: actions/github-script@v8
@@ -220,6 +222,8 @@ jobs:
         run: flutter test
       - name: Build Windows release
         run: flutter build windows --release
+      - name: Verify Windows build identity
+        run: python ../scripts/verify_windows_release.py --exe build/windows/x64/runner/Release/nas_todo.exe
       - name: Test transactional Windows updater
         run: |
           $updateTest = Start-Process -FilePath "$PWD/build/windows/x64/runner/Release/nas_todo_updater.exe" -ArgumentList '--self-test' -Wait -PassThru -WindowStyle Hidden

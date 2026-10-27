@@ -143,7 +143,7 @@ class UpdateController extends ChangeNotifier {
       }
       if (status == UpdateStatus.ready &&
           manifest != null &&
-          entry.path == _package.path) {
+          await FileSystemEntity.identical(entry.path, _package.path)) {
         continue;
       }
       try {
