@@ -10,6 +10,14 @@ static void Write(const fs::path& path, const std::string& value) {
   fs::create_directories(path.parent_path()); std::ofstream out(path, std::ios::binary); out << value;
   if (!out) throw std::runtime_error("storage");
 }
+static std::string NarrowAscii(const std::wstring& value) {
+  std::string result;
+  for (wchar_t character : value) {
+    if (character > 127) throw std::runtime_error("identity");
+    result += static_cast<char>(character);
+  }
+  return result;
+}
 static int SelfTest() {
   wchar_t temporary[MAX_PATH];
   if (!GetTempPathW(MAX_PATH, temporary)) return 10;
@@ -47,9 +55,9 @@ int APIENTRY wWinMain(HINSTANCE, HINSTANCE, wchar_t*, int) {
   try {
     const fs::path stage(args[1]), target(args[2]);
     const auto pid = static_cast<DWORD>(std::stoul(args[3]));
-    const std::string version(args[4].begin(), args[4].end());
+    const std::string version = NarrowAscii(args[4]);
     const int code = std::stoi(args[5]);
-    const std::string inventoryHash(args[6].begin(), args[6].end());
+    const std::string inventoryHash = NarrowAscii(args[6]);
     if (pid == GetCurrentProcessId() || !Within(UpdatesRoot(), stage) || !NoLinks(target) || Hash(stage / L"update-files.txt") != inventoryHash) return 3;
     VerifyStage(stage, version, code);
     HANDLE parent = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
