@@ -6,6 +6,18 @@ from pathlib import Path
 import re
 import subprocess
 
+def verify_signing_output(output, expected):
+    # v3.1 prints SDK-range signers rather than the older "Signer #1" label.
+    counts = re.findall(r'^Number of signers:\s*(\d+)\s*$', output, re.M)
+    lines = [line.strip() for line in output.splitlines()
+             if line.startswith('Signer ') and 'certificate SHA-256 digest:' in line]
+    label = r'(?:#1|\(minSdkVersion=\d+(?: \(dev release=true\))?, maxSdkVersion=\d+\))'
+    pattern = re.compile(r'Signer ' + label + r' certificate SHA-256 digest:\s*([0-9a-fA-F]{64})')
+    matches = [pattern.fullmatch(line) for line in lines]
+    assert counts == ['1'] and lines and all(matches), 'Release must have one recognized APK signer'
+    certificates = {match.group(1).lower() for match in matches}
+    assert certificates == {expected}, 'Release signing certificate mismatch'
+
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--apk',required=True)
@@ -19,12 +31,11 @@ def main():
     assert tools, 'Android signing verifier is unavailable'
     tool=tools[-1]
     result=subprocess.run([str(tool),'verify','--verbose','--print-certs',str(apk)],capture_output=True,text=True,check=True)
-    certificates=re.findall(r'Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]+)',result.stdout)
     print('Public APK signing certificate diagnostics: ' + json.dumps([
         line.strip() for line in result.stdout.splitlines() if 'certificate SHA-256 digest:' in line
     ]))
     print('Expected public certificate SHA256: ' + expected)
-    assert len(certificates)==1 and certificates[0].lower()==expected, 'Release signing certificate mismatch'
+    verify_signing_output(result.stdout, expected)
     info=subprocess.run([str(tool.with_name('aapt')),'dump','badging',str(apk)],capture_output=True,text=True,check=True).stdout
     identity=re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'",info)
     assert identity and identity.groups()==('cn.privatetodo.app',code,version), 'APK identity/version mismatch'
