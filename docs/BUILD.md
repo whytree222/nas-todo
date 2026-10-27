@@ -1,4 +1,4 @@
-> 最新版本：[v0.11.1](https://github.com/whytree222/nas-todo/releases/tag/v0.11.1)。本次只需更新客户端；v0.11.0 NAS 服务可继续使用。
+> 最新版本：[v0.12.0](https://github.com/whytree222/nas-todo/releases/tag/v0.12.0)。本次只需更新客户端；v0.11.0 NAS 服务可继续使用。
 
 # 构建安卓与 Windows 客户端
 

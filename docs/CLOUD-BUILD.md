@@ -1,4 +1,4 @@
-> 最新版本：[v0.11.1](https://github.com/whytree222/nas-todo/releases/tag/v0.11.1)。本次只需更新客户端；v0.11.0 NAS 服务可继续使用。
+> 最新版本：[v0.12.0](https://github.com/whytree222/nas-todo/releases/tag/v0.12.0)。本次只需更新客户端；v0.11.0 NAS 服务可继续使用。
 
 # 云端编译与公开发布
 
@@ -10,10 +10,10 @@
 
 main的client/server或build.yml变化触发GitHub Actions，也可手动运行Build native test apps。固定Flutter3.47.6、Python3.12，Android使用JDK17，Windows使用windows-2022。后端通过后才运行两端分析、测试和构建。Actions产物保留14天，长期下载使用Release。
 
-publish-v0111.yml固定已通过的源提交和构建运行，检查APK、完整Windows目录及NAS代码一致后，核对发布字节数和SHA256；标签指向测试源提交。APK仍是测试签名，长期覆盖安装需保留自己的固定签名。
+publish-v012.yml固定已通过的源提交和构建运行，检查APK、完整Windows目录及NAS代码一致后，核对发布字节数和SHA256；标签指向测试源提交。APK仍是测试签名，长期覆盖安装需保留自己的固定签名。
 
 ## 升级与验收
 
-v0.11.1 仅更新客户端。若已使用 v0.11.0 成就服务，NAS 无需再次部署；仅当仍使用更旧的服务时，先同步并停止原项目，备份整份data，在原compose中替换todo-sync的整个command段，保留密钥、端口、用户和挂载，无需init。command-block.yaml不是完整compose，不能直接覆盖原文件。详见 [升级说明](UPGRADE-v0.11.0.md)。已有习惯从NAS新规则启用当天开始计计划日，历史已结算成就不回算，习惯与打卡历史不参加待办月底清理。
+v0.12.0 仅更新客户端。若已使用 v0.11.0 成就服务，NAS 无需再次部署；仅当仍使用更旧的服务时，先同步并停止原项目，备份整份data，在原compose中替换todo-sync的整个command段，保留密钥、端口、用户和挂载，无需init。command-block.yaml不是完整compose，不能直接覆盖原文件。详见 [升级说明](UPGRADE-v0.11.0.md)。已有习惯从NAS新规则启用当天开始计计划日，历史已结算成就不回算，习惯与打卡历史不参加待办月底清理。
 
 Windows解压整个ZIP并保留DLL和data，运行nas_todo.exe；desktop-widget.cmd单独启动毛玻璃组件。两端沿用原ZeroTier地址和访问令牌，验证新增、离线编辑、重启、习惯打卡撤销、双端冲突和新成就规则。真实设备和NAS部署未由云端测试代替。
