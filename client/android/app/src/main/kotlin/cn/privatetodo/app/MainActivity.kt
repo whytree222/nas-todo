@@ -11,9 +11,11 @@ import java.util.UUID
 
 class MainActivity : FlutterActivity() {
     private var widgetChannel: MethodChannel? = null
+    private var appUpdates: AppUpdates? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        appUpdates = AppUpdates(this, flutterEngine.dartExecutor.binaryMessenger)
         widgetChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "cn.privatetodo/widgets")
         widgetChannel!!.setMethodCallHandler { call, result ->
             val prefs = getSharedPreferences(TodoWidgetProvider.PREFS, MODE_PRIVATE)
@@ -57,6 +59,12 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         acceptWidgetAction(intent)
+    }
+
+    override fun onDestroy() {
+        appUpdates?.close()
+        appUpdates = null
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {

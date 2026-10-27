@@ -4,6 +4,11 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val releaseKeys = listOf("NAS_TODO_KEYSTORE_PATH", "NAS_TODO_STORE_PASSWORD", "NAS_TODO_KEY_ALIAS", "NAS_TODO_KEY_PASSWORD")
+val signingValues = releaseKeys.map { System.getenv(it).orEmpty() }
+require(signingValues.all { it.isBlank() } || signingValues.all { it.isNotBlank() }) { "All four signing values are required" }
+val hasReleaseKey = signingValues.all { it.isNotBlank() }
+
 android {
     namespace = "cn.privatetodo.app"
     compileSdk = flutter.compileSdkVersion
@@ -29,12 +34,20 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    buildFeatures { buildConfig = true }
+    signingConfigs {
+        if (hasReleaseKey) create("fixedRelease") {
+            storeFile = file(signingValues[0])
+            storePassword = signingValues[1]
+            keyAlias = signingValues[2]
+            keyPassword = signingValues[3]
+        }
+    }
     buildTypes {
+        debug { buildConfigField("boolean", "UPDATES_ENABLED", "false") }
         release {
-            // Local prototype builds use the development key. Keep this same
-            // key across installs to retain data; configure a private release
-            // keystore before distributing or establishing permanent installs.
-            signingConfig = signingConfigs.getByName("debug")
+            buildConfigField("boolean", "UPDATES_ENABLED", hasReleaseKey.toString())
+            if (hasReleaseKey) signingConfig = signingConfigs.getByName("fixedRelease")
         }
     }
 }

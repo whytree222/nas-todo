@@ -34,6 +34,7 @@ class FlutterWindow : public Win32Window {
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> desktop_channel_;
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> updates_channel_;
   bool OpenWidget();
   void ShowMain();
   std::unique_ptr<DesktopWidget> widget_;

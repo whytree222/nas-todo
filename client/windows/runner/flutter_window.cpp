@@ -1,4 +1,5 @@
 #include "flutter_window.h"
+#include "update_channel.h"
 #include <optional>
 #include <flutter/standard_method_codec.h>
 #include "flutter/generated_plugin_registrant.h"
@@ -34,6 +35,7 @@ bool FlutterWindow::OnCreate() {
       frame.right - frame.left, frame.bottom - frame.top, project_);
   if (!flutter_controller_->engine() || !flutter_controller_->view()) return false;
   RegisterPlugins(flutter_controller_->engine());
+  updates_channel_ = CreateUpdateChannel(flutter_controller_->engine()->messenger(), GetHandle());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
   desktop_channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
       flutter_controller_->engine()->messenger(), "cn.privatetodo/desktop",
@@ -70,12 +72,17 @@ bool FlutterWindow::OnCreate() {
 }
 void FlutterWindow::OnDestroy() {
   widget_.reset();
+  updates_channel_.reset();
   desktop_channel_.reset();
   flutter_controller_.reset();
   Win32Window::OnDestroy();
 }
 LRESULT FlutterWindow::MessageHandler(HWND hwnd, UINT message, WPARAM wparam,
                                     LPARAM lparam) noexcept {
+  if (message == WM_APP + 48) {
+    // An explicitly confirmed update must close the independent component too.
+    DestroyWindow(hwnd); return 0;
+  }
   if (message == kHostTestStart && host_self_test_) {
     if (!OpenWidget()) { PostQuitMessage(21); return 0; }
     SendMessage(hwnd, WM_CLOSE, 0, 0);

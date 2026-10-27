@@ -70,6 +70,7 @@ class TaskEditorDialog extends StatefulWidget {
 
 class TaskEditorState extends State<TaskEditorDialog> {
   bool _fullScreen = false;
+  VoidCallback? _resumeUpdates;
   bool _allowClose = false;
   late String _initialInput;
   String get _inputSnapshot => jsonEncode([
@@ -156,6 +157,7 @@ class TaskEditorState extends State<TaskEditorDialog> {
   @override
   void initState() {
     super.initState();
+    _resumeUpdates = widget.controller.pauseUpdatesForEditor();
     widget.controller.addListener(_refresh);
     _title = TextEditingController(text: widget.task?.title ?? '');
     _note = TextEditingController(text: widget.task?.note ?? '');
@@ -216,6 +218,7 @@ class TaskEditorState extends State<TaskEditorDialog> {
   @override
   void dispose() {
     widget.controller.removeListener(_refresh);
+    _resumeUpdates?.call();
     _title.dispose();
     _note.dispose();
     _list.dispose();

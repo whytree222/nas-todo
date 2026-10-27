@@ -14,6 +14,7 @@ import 'sync_core.dart';
 import 'task_dates.dart';
 import 'personal_core.dart';
 import 'workspace_preferences.dart';
+import 'update_controller.dart';
 import 'habit_achievement.dart';
 
 /// Keeps local edits available even when the NAS cannot be reached.
@@ -108,6 +109,41 @@ class AppController extends ChangeNotifier {
 
   static const _tokenKey = 'private_todo_nas_token';
 
+  UpdateController? updates;
+  bool _updatesForeground = true;
+  int _updateEditorCount = 0;
+  bool _quickUpdateBlock = false;
+  VoidCallback pauseUpdatesForEditor() {
+    _updateEditorCount++;
+    _updatePolicy();
+    var released = false;
+    return () {
+      if (!released) {
+        released = true;
+        _updateEditorCount--;
+        _updatePolicy();
+      }
+    };
+  }
+
+  void setUpdatesForeground(bool value) {
+    _updatesForeground = value;
+    _updatePolicy();
+  }
+
+  void setQuickUpdateBlock(bool value) {
+    _quickUpdateBlock = value;
+    _updatePolicy();
+  }
+
+  void _updatePolicy() => updates?.setAllowed(
+    !_disposed &&
+        _updatesForeground &&
+        !busy &&
+        _updateEditorCount == 0 &&
+        !_quickUpdateBlock,
+  );
+
   static Future<AppController> create() async {
     final directory = await getApplicationSupportDirectory();
     await directory.create(recursive: true);
@@ -126,6 +162,9 @@ class AppController extends ChangeNotifier {
     );
     try {
       await controller._initialize();
+      controller.updates = await UpdateController.create();
+      controller.updates?.addListener(controller._notify);
+      controller._updatePolicy();
       return controller;
     } catch (_) {
       controller.dispose();
@@ -499,7 +538,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> sync() async {
-    if (_disposed || busy) {
+    if (_disposed || busy || updates?.active == true) {
       return;
     }
     if (!isConfigured) {
@@ -531,6 +570,8 @@ class AppController extends ChangeNotifier {
   }
 
   void onResume() {
+    setUpdatesForeground(true);
+    unawaited(updates?.resume() ?? Future.value());
     _notify();
     if (isConfigured && !busy) {
       unawaited(sync());
@@ -555,6 +596,7 @@ class AppController extends ChangeNotifier {
   }
 
   void _notify() {
+    _updatePolicy();
     if (!_disposed) {
       notifyListeners();
     }
@@ -565,6 +607,8 @@ class AppController extends ChangeNotifier {
     _disposed = true;
     _periodicTimer?.cancel();
     _editTimer?.cancel();
+    updates?.removeListener(_notify);
+    updates?.dispose();
     _transport.dispose();
     super.dispose();
   }

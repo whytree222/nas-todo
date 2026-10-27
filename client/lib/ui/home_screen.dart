@@ -10,6 +10,7 @@ import '../task_dates.dart';
 import '../task_tree.dart';
 import 'habits_screen.dart';
 import 'weekly_plan_screen.dart';
+import 'update_card.dart';
 import '../weekly_plan.dart';
 import 'task_repeat_options.dart';
 import 'personal_conflict_dialog.dart';
@@ -131,6 +132,10 @@ class _HomeScreenState extends State<HomeScreen>
     _taskScroll.addListener(_rememberWorkspace);
     _quickFocus.addListener(_refreshQuickFocus);
     _scheduleCelebration();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.controller.updates != null)
+        widget.controller.onResume();
+    });
   }
 
   @override
@@ -224,12 +229,14 @@ class _HomeScreenState extends State<HomeScreen>
     _quickTitle.dispose();
     _quickFocus.removeListener(_refreshQuickFocus);
     _quickFocus.dispose();
+    widget.controller.setQuickUpdateBlock(false);
     _searchFocus.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    widget.controller.setUpdatesForeground(state == AppLifecycleState.resumed);
     if (state == AppLifecycleState.resumed) {
       widget.controller.onResume();
       _scheduleCelebration();
@@ -250,6 +257,7 @@ class _HomeScreenState extends State<HomeScreen>
   bool _quickSaving = false;
 
   void _refreshQuickFocus() {
+    widget.controller.setQuickUpdateBlock(_quickFocus.hasFocus);
     if (mounted) {
       setState(() {});
     }
@@ -556,6 +564,26 @@ class _HomeScreenState extends State<HomeScreen>
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               _header(wide),
+                              if (widget.controller.updates?.hasUpdate ==
+                                      true &&
+                                  widget.controller.updates!.allowed)
+                                MaterialBanner(
+                                  content: Text(
+                                    '发现新版本 ${widget.controller.updates!.manifest!.versionName}',
+                                  ),
+                                  leading: const Icon(
+                                    Icons.system_update_alt_rounded,
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => showAppUpdateDialog(
+                                        context,
+                                        widget.controller.updates!,
+                                      ),
+                                      child: const Text('查看更新'),
+                                    ),
+                                  ],
+                                ),
                               if (widget.controller.error != null)
                                 _errorBanner(),
                               if (widget.controller.personalUpgradeRequired ||

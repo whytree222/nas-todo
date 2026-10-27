@@ -8,6 +8,7 @@ project(runner LANGUAGES CXX)
 # Any new source files that you add to the application should be added here.
 add_executable(${BINARY_NAME} WIN32
   "flutter_window.cpp"
+  "update_channel.cpp"
   "main.cpp"
   "utils.cpp"
   "win32_window.cpp"
@@ -34,6 +35,18 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 # Add dependency libraries and include directories. Add any application-specific
 # dependencies here.
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
+add_library(update_files STATIC "update_files.cpp")
+apply_standard_settings(update_files)
+target_compile_options(update_files PRIVATE /utf-8)
+target_compile_definitions(update_files PRIVATE NOMINMAX)
+target_link_libraries(update_files PUBLIC bcrypt.lib version.lib shell32.lib ole32.lib)
+target_link_libraries(${BINARY_NAME} PRIVATE update_files)
+add_executable(nas_todo_updater WIN32 "updater_main.cpp")
+apply_standard_settings(nas_todo_updater)
+target_compile_options(nas_todo_updater PRIVATE /utf-8)
+target_compile_definitions(nas_todo_updater PRIVATE NOMINMAX)
+target_link_libraries(nas_todo_updater PRIVATE update_files)
+add_dependencies(${BINARY_NAME} nas_todo_updater)
 target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib" "gdi32.lib" "advapi32.lib")
 
 add_library(widget_ui STATIC "desktop_widget.cpp" "widget_painter.cpp" "glass_surface.cpp")

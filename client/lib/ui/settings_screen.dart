@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_controller.dart';
 import '../appearance.dart';
 import '../theme.dart';
+import 'update_card.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, required this.controller});
@@ -60,6 +61,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (controller.updates != null) ...[
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: UpdateCard(updates: controller.updates!),
+              ),
+            ),
+            const SizedBox(height: 18),
+          ],
           _SettingsCard(
             title: '外观与主题',
             icon: Icons.palette_outlined,
