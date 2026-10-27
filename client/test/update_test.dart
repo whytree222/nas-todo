@@ -1,15 +1,20 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nas_todo/update_controller.dart';
 import 'package:nas_todo/update_io.dart';
 import 'package:nas_todo/update_manifest.dart';
 import 'package:nas_todo/update_windows.dart';
 import 'package:nas_todo/ui/update_card.dart';
+import 'package:nas_todo/appearance.dart';
+import 'package:nas_todo/theme.dart';
 
 Map<String, dynamic> _json({String platform = 'android'}) => {
   'schema': 1,
@@ -410,10 +415,126 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('安装更新？'), findsOneWidget);
       expect(native.installs, 0);
-      await tester.tap(find.text('继续安装'));
+      await tester.runAsync(() async {
+        await tester.tap(find.text('继续安装'));
+        for (var i = 0; i < 200 && native.installs == 0; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
       await tester.pumpAndSettle();
       expect(native.installs, 1);
       expect(tester.takeException(), isNull);
     },
   );
+  for (final desktop in [false, true]) {
+    testWidgets(
+      'Update preview on ${desktop ? "Windows" : "phone"} uses synthetic release information',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = desktop
+            ? const Size(1100, 800)
+            : const Size(390, 844);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        final font = File(
+          '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+        );
+        final hasFont = font.existsSync();
+        if (hasFont) {
+          await tester.runAsync(() async {
+            await (FontLoader('UpdatePreviewSans')..addFont(
+                  Future.value(ByteData.sublistView(await font.readAsBytes())),
+                ))
+                .load();
+            final flutter = Platform.environment['FLUTTER_ROOT'];
+            final icons = File(
+              '$flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
+            );
+            if (icons.existsSync()) {
+              await (FontLoader('MaterialIcons')..addFont(
+                    Future.value(
+                      ByteData.sublistView(await icons.readAsBytes()),
+                    ),
+                  ))
+                  .load();
+            }
+          });
+        }
+        var theme = buildTodoTheme(TodoThemeColor.green);
+        if (hasFont) {
+          theme = theme.copyWith(
+            textTheme: theme.textTheme.apply(fontFamily: 'UpdatePreviewSans'),
+          );
+        }
+        final previewInfo = UpdateIdentity(
+          platform: desktop ? 'windows' : 'android',
+          versionName: '0.13.0',
+          versionCode: 17,
+          directory: native.info.directory,
+        );
+        final preview = UpdateController(
+          native: _Native(previewInfo),
+          network: network,
+          info: previewInfo,
+          preferences: updates.preferences,
+        );
+        addTearDown(preview.dispose);
+        preview.manifest = UpdateManifest.parse(
+          jsonEncode(_json(platform: desktop ? 'windows' : 'android')),
+          platform: desktop ? 'windows' : 'android',
+        );
+        preview.status = UpdateStatus.available;
+        await tester.pumpWidget(
+          RepaintBoundary(
+            key: const ValueKey('update-preview'),
+            child: MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: theme,
+              home: Scaffold(
+                appBar: AppBar(title: const Text('设置')),
+                body: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: SingleChildScrollView(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: UpdateCard(updates: preview),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        final directory = Platform.environment['NAS_TODO_TEST_TMP'];
+        if (hasFont && directory != null) {
+          final boundary = tester.renderObject<RenderRepaintBoundary>(
+            find.byKey(const ValueKey('update-preview')),
+          );
+          await tester.runAsync(() async {
+            final image = await boundary.toImage(pixelRatio: 1.5);
+            try {
+              final data = await image.toByteData(
+                format: ui.ImageByteFormat.png,
+              );
+              await Directory(directory).create(recursive: true);
+              await File(
+                '$directory/update-${desktop ? "windows" : "phone"}.png',
+              ).writeAsBytes(data!.buffer.asUint8List(), flush: true);
+            } finally {
+              image.dispose();
+            }
+          });
+        }
+      },
+    );
+  }
 }

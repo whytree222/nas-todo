@@ -131,7 +131,28 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Build debug APK for testing
+        # Update UI previews contain synthetic release metadata only.
         run: flutter build apk --debug
+      - name: Record update UI previews
+        env:
+          NAS_TODO_TEST_TMP: ${{ runner.temp }}/nas-todo-sync-tests
+        run: |
+          python - <<'PY'
+          import base64, os
+          from pathlib import Path
+          for name in ('update-phone.png', 'update-windows.png'):
+              path = Path(os.environ['NAS_TODO_TEST_TMP']) / name
+              if not path.is_file():
+                  raise RuntimeError(f'Missing update preview: {name}')
+              print('UPDATE_PREVIEW_PNG ' + name + ' ' + base64.b64encode(path.read_bytes()).decode('ascii'))
+          PY
+      - name: Save update UI previews
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-visual-previews
+          path: ${{ runner.temp }}/nas-todo-sync-tests/update-*.png
+          if-no-files-found: error
+          retention-days: 14
       - name: Prepare fixed signing key
         if: env.HAS_RELEASE_SIGNING == 'true'
         env:

@@ -574,10 +574,17 @@ class AppController extends ChangeNotifier {
 
   void onResume() {
     setUpdatesForeground(true);
-    unawaited(updates?.resume() ?? Future.value());
     _notify();
     if (isConfigured && !busy) {
       unawaited(sync());
+    }
+    unawaited(_resumeUpdatesAfterSync());
+  }
+
+  Future<void> _resumeUpdatesAfterSync() async {
+    await waitForSync();
+    if (!_disposed && _updatesForeground) {
+      await updates?.resume();
     }
   }
 
