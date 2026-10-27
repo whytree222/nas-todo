@@ -43,6 +43,7 @@ int APIENTRY wWinMain(HINSTANCE, HINSTANCE, wchar_t*, int) {
   LocalFree(argv);
   if (args.size() == 1 && args[0] == L"--self-test") return SelfTest();
   if (args.size() != 8 || args[0] != L"--apply") return 2;
+  fs::path restartTarget;
   try {
     const fs::path stage(args[1]), target(args[2]);
     const auto pid = static_cast<DWORD>(std::stoul(args[3]));
@@ -66,8 +67,9 @@ int APIENTRY wWinMain(HINSTANCE, HINSTANCE, wchar_t*, int) {
     if (confirmed != WAIT_OBJECT_0) { CloseHandle(parent); return 21; }
     const DWORD waited = WaitForSingleObject(parent, 30000); CloseHandle(parent);
     if (waited != WAIT_OBJECT_0) return 6;
+    restartTarget = target;
     // Bind staged file bytes again after waiting for the main process to exit.
-    if (Hash(stage / L"update-files.txt") != inventoryHash) return 7;
+    if (Hash(stage / L"update-files.txt") != inventoryHash) throw std::runtime_error("hash");
     const auto verified = VerifyStage(stage, version, code);
     const auto stamp = std::chrono::system_clock::now().time_since_epoch().count();
     const auto backup = UpdatesRoot() / (L"backup-" + std::to_wstring(stamp));
@@ -76,5 +78,11 @@ int APIENTRY wWinMain(HINSTANCE, HINSTANCE, wchar_t*, int) {
     Write(UpdatesRoot() / L"update-result.txt", applied ? "success " + version : "failed: previous program restored; backup retained");
     Launch(target / L"nas_todo.exe", L"", target);
     return applied ? 0 : 8;
-  } catch (...) { return 9; }
+  } catch (...) {
+    if (!restartTarget.empty()) {
+      try { Write(UpdatesRoot() / L"update-result.txt", "failed: update preparation did not finish; program files retained"); } catch (...) {}
+      Launch(restartTarget / L"nas_todo.exe", L"", restartTarget);
+    }
+    return 9;
+  }
 }

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cwctype>
+#include <cctype>
 #include <fstream>
 #include <iomanip>
 #include <regex>
@@ -36,8 +37,9 @@ bool NoLinks(const fs::path& path) {
 bool Within(const fs::path& root, const fs::path& path) {
   auto r = fs::absolute(root).lexically_normal().wstring();
   auto p = fs::absolute(path).lexically_normal().wstring();
-  std::transform(r.begin(), r.end(), r.begin(), ::towlower);
-  std::transform(p.begin(), p.end(), p.begin(), ::towlower);
+  const auto lower = [](wchar_t value) { return static_cast<wchar_t>(std::towlower(value)); };
+  std::transform(r.begin(), r.end(), r.begin(), lower);
+  std::transform(p.begin(), p.end(), p.begin(), lower);
   return p.size() > r.size() && p.compare(0, r.size(), r) == 0 && p[r.size()] == L'\\' && NoLinks(path);
 }
 bool SafeRelative(const std::string& name) {
@@ -99,7 +101,7 @@ std::vector<FileEntry> VerifyStage(const fs::path& stage, const std::string& ver
   while (std::getline(input, line)) {
     if (line.size() < 66 || line[64] != ' ' || !std::regex_match(line.substr(0, 64), std::regex("[0-9a-f]{64}"))) throw std::runtime_error("hash");
     auto relative = line.substr(65), lower = relative;
-    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char value) { return static_cast<char>(std::tolower(value)); });
     if (!SafeRelative(relative) || !seen.insert(lower).second || files.size() >= 4096) throw std::runtime_error("identity");
     const auto path = stage / fs::u8path(relative);
     if (!Within(stage, path) || !fs::is_regular_file(path) || Hash(path) != line.substr(0, 64)) throw std::runtime_error("hash");

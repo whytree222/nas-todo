@@ -23,4 +23,7 @@ client/windows/flutter/ephemeral/
 # Personal signing keys
 *.jks
 *.keystore
+*.p12
+*.pfx
+*.pem
 client/android/key.properties

@@ -141,6 +141,25 @@ class UpdateController extends ChangeNotifier {
   Future<void> _cleanup() async {
     // Only direct package/partial files in the app-owned update directory.
     await for (final entry in info.directory.list(followLinks: false)) {
+      if (entry is Directory &&
+          RegExp(r'^nas-todo-\d+\.\d+\.\d+\.zip\.stage$').hasMatch(
+            entry.uri.pathSegments.where((part) => part.isNotEmpty).last,
+          )) {
+        final readyStage = status == UpdateStatus.ready && manifest != null
+            ? Directory('${_package.path}.stage')
+            : null;
+        if (readyStage != null &&
+            await readyStage.exists() &&
+            await FileSystemEntity.identical(entry.path, readyStage.path)) {
+          continue;
+        }
+        try {
+          await entry.delete(recursive: true);
+        } catch (_) {
+          /* Leave a locked app-owned stage for a later cleanup. */
+        }
+        continue;
+      }
       if (entry is! File ||
           !RegExp(r'^nas-todo-\d+\.\d+\.\d+\.(apk|zip)(\.part)?$')
               .hasMatch(entry.uri.pathSegments.last)) {

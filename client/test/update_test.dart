@@ -304,6 +304,13 @@ void main() {
     await updates.download();
     expect(updates.status, UpdateStatus.ready);
     expect(native.installs, 0);
+    final stale = Directory(
+      '${native.info.directory.path}/nas-todo-0.1.0.zip.stage',
+    );
+    await stale.create();
+    await File('${stale.path}/old.dll').writeAsBytes([1]);
+    final unrelated = Directory('${native.info.directory.path}/manual-backup');
+    await unrelated.create();
     final restarted = UpdateController(
       native: native,
       network: network,
@@ -312,6 +319,8 @@ void main() {
     );
     await restarted.initialize();
     expect(restarted.status, UpdateStatus.ready);
+    expect(await stale.exists(), isFalse);
+    expect(await unrelated.exists(), isTrue);
     restarted.dispose();
     await updates.install();
     expect(native.installs, 1);
